@@ -1,5 +1,4 @@
-﻿namespace KeyboardIntercept
-{
+﻿namespace KeyboardIntercept {
     partial class UserInterface
     {
         /// <summary>

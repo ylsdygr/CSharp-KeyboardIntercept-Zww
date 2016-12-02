@@ -5,8 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace KeyboardIntercept
-{
+namespace KeyboardIntercept {
     class disableKeyboard : Form
     {
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) {
