@@ -28,6 +28,7 @@ namespace KeyboardIntercept {
                 hook.OnMouseActivity += new MouseEventHandler(hook_OnMouseActivity);
                 hook.Start();
             }
+
         }
         private void Form1_FormClosing(object sender, FormClosingEventArgs e) {
             if (btnUnInstall.Enabled == true) {

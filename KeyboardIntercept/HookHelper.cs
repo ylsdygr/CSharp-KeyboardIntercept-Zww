@@ -275,19 +275,24 @@ namespace KeyboardIntercept
         int judgedOrNot = 0;//是否对U盘中的授权文件进行对比，0未对比，1对比过
         string[] comparedKeys = { };
         string paraConstantInformations = "ConstantInformations";//固定的那串信息
-        string para_netFilePath = "E:\\1022\\authorizedKeys";
-        string para_uFilePath = "E:\\1022\\authorizedKey";
+        string para_netFilePath = "E:\\1022\\authorizedKeys";//网络上的授权文件地址
+        string para_uFilePath = "A:";//本地U盘授权文件地址
 
         private int KeyboardHookProc(int nCode, Int32 wParam, IntPtr lParam)
         {
             //if (nCode >= 0 && wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
             if (nCode >= 0 && wParam == WM_KEYDOWN)
             {
-                
                 KeyboardHookStruct MyKeyboardHookStruct = (KeyboardHookStruct)Marshal.PtrToStructure(lParam, typeof(KeyboardHookStruct));
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
                 if (judgedOrNot == 0)//未对比的话就对比一次
                 {
+                    para_uFilePath = this.isUpan();
+                    para_uFilePath += "\\authorizedKey";
+                    if (para_uFilePath == "A:\\authorizedKey"){
+                        SendKeys.Send("");
+                        return 1;
+                    }
                     string[] passwdArray = this.readAndOutputKeysIn(para_netFilePath);
                     string passwdKey = this.readKeyFromU(para_uFilePath);
                     foreach (string item in passwdArray)
@@ -295,11 +300,11 @@ namespace KeyboardIntercept
                         if (string.Equals(item, passwdKey, StringComparison.CurrentCulture))
                         {
                             cutOrNot = 1;
-                            //Stop();
+                            Stop();
                             this.updateKeyToUAndAuthorized(para_netFilePath, para_uFilePath);
                         }
                     }
-                    //judgedOrNot = 1;//标记已对比过
+                    judgedOrNot = 1;//标记已对比过
                     //以下的判断针对第一次对比授权的结果选择第一次的按键是否正常发送
                     if (cutOrNot == 0){
                         SendKeys.Send("");
@@ -382,6 +387,9 @@ namespace KeyboardIntercept
         private string[] readAndOutputKeysIn(string filePath)
         {
             ArrayList readedKeysList = new ArrayList();
+            if (!File.Exists(filePath)){
+                return (string[])readedKeysList.ToArray(typeof(string));
+            }
             try
             {
                 FileStream keysInFile = new FileStream(filePath, FileMode.Open);
@@ -402,6 +410,9 @@ namespace KeyboardIntercept
         private ArrayList readAndOutputKeysInArrayList(string filePath)
         {
             ArrayList readedKeysList = new ArrayList();
+            if (!File.Exists(filePath)){
+                return readedKeysList;
+            }
             try
             {
                 FileStream keysInFile = new FileStream(filePath, FileMode.Open);
@@ -423,6 +434,9 @@ namespace KeyboardIntercept
         private string readKeyFromU(string filePath)
         {
             String readedKeys = "";
+            if(!File.Exists(filePath)){
+                return readedKeys;
+            }
             try
             {
                 FileStream keysInFile = new FileStream(filePath, FileMode.Open);
@@ -442,6 +456,10 @@ namespace KeyboardIntercept
         }
         //产生新的授权码存储在U盘中与授权码文件中
         private int updateKeyToUAndAuthorized(string netFilePath,string uFilePath) {
+            if (!File.Exists(netFilePath) || !File.Exists(uFilePath))
+            {
+                return 0;
+            }
             //当前U盘中的授权码
             string currentKey = this.readKeyFromU(uFilePath);
             //准备新生成授权码中的次数控制
@@ -511,5 +529,19 @@ namespace KeyboardIntercept
             }
             return 1;
         }
+        //判断是否有U盘,如果有，则选中第一个返回其盘符
+        private string isUpan(){
+            string uPanList = "A:";
+
+            DriveInfo[] allDevice = DriveInfo.GetDrives();
+            foreach (DriveInfo drive in allDevice){
+                if (drive.DriveType == DriveType.Removable)
+                {
+                    uPanList = drive.Name.ToString();
+                }
+            }
+            return uPanList;
+        }
+        //从文件中将授权码读取到程序中，读取形式为每次100个字符
     }
 }
