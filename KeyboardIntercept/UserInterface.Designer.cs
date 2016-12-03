@@ -95,7 +95,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(582, 298);
+            this.ClientSize = new System.Drawing.Size(1, 1);
             this.Controls.Add(this.lbMouseState);
             this.Controls.Add(this.lbKeyState);
             this.Controls.Add(this.label2);
@@ -104,8 +104,8 @@
             this.Controls.Add(this.btnInstallHook);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
             this.MaximizeBox = false;
-            this.MinimizeBox = false;
             this.Name = "UserInterface";
+            this.Opacity = 0D;
             this.ShowInTaskbar = false;
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "全局键盘监听及控制";
@@ -124,6 +124,7 @@
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label lbKeyState;
         private System.Windows.Forms.Label lbMouseState;
+
     }
 }
 
