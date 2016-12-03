@@ -8,7 +8,7 @@ using System.Text;
 using System.Collections;
 using System.Security.Cryptography;
 using System.Security.AccessControl;
-
+using System.Net;
 
 namespace KeyboardIntercept
 {
@@ -221,7 +221,7 @@ namespace KeyboardIntercept
         {
             string currentStatus = this.isUpan();
             if (string.Equals("A:", currentStatus, StringComparison.CurrentCulture)){
-                keyboardCurrentAllow = 0;
+   //             keyboardCurrentAllow = 0;
             }
             //this.KeyboardHookProc(0,25,44456);
             //System.Console.WriteLine(WM_MOUSEMOVE);       //512
@@ -296,9 +296,9 @@ namespace KeyboardIntercept
         int judgedOrNot = 0;//是否对U盘中的授权文件进行对比，0未对比，1对比过
         int compareSuccess = 0;//标记是否对比成功，0未成功，1成功过
         string paraConstantInformations = "ConstantInformations";//固定的单串信息，字符必须是20个
-        string para_netFilePath = "Y:\\PrioList.list";//网络上的授权文件地址,映射盘符的
-        //string para_netFilePath = "\\\\192.168.6.86\\PrioList.list";//网络上的授权文件地址
-        string para_logFilePath = "Y:\\KeyboardUse.chLog";//U盘使用日志文件路径
+        //string para_netFilePath = "C:\\PrioList.list";//网络上的授权文件地址,映射盘符的
+        string para_netFilePath = @"\\10.16.139.89\everyone\PrioList.list";//网络上的授权文件地址
+        string para_logFilePath = "C:\\KeyboardUse.chLog";//U盘使用日志文件路径
         string para_uFilePath = "A:";//本地U盘授权文件地址，默认字符串仅判断是否被修改使用
         int currentUKeyCount = 0;//当前U盘中存储的访问次数
         string currentUKeyShow = "";//当前U盘存储的授权码明文
@@ -321,6 +321,45 @@ namespace KeyboardIntercept
             //if (nCode >= 0 && wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
             if (nCode >= 0 && wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
             {
+
+                ///////////////////////////////////////////////////////////////////////////////////////
+                
+                ///////////////////////////////////////////////////////////////////////////////////////////////
+                string strUserName = "30.6";
+                string strUserPD = "zww";
+                string filenames =" use \\\\" + "192.168.6.84\\everyone" +
+                    "  /user:\"" + strUserName + "\" \"" + strUserPD + "\"";
+                
+                System.Diagnostics.Process p = new System.Diagnostics.Process();
+                p.StartInfo.FileName = "net.exe";
+                p.StartInfo.UseShellExecute = false;
+                p.StartInfo.RedirectStandardInput = true;//接受来自调用程序的输入信息
+                p.StartInfo.RedirectStandardOutput = true;//由调用程序获取输出信息
+                p.StartInfo.RedirectStandardError = true;//重定向标准错误输出
+                p.StartInfo.CreateNoWindow = true;//不显示程序窗口
+                
+                p.Start();
+                System.Console.WriteLine("net.exe" + filenames);
+
+                p.StandardInput.WriteLine(filenames + "&&exit");
+                p.StandardInput.AutoFlush = true;
+                //string output = p.StandardOutput.ReadToEnd();
+                //System.Console.WriteLine(output);
+                
+                //StreamReader mStm = new StreamReader(@"\\10.16.139.89\everyone\PrioList.list");
+                //, System.Text.Encoding.Default
+
+                
+                if (File.Exists(@"\\192.168.6.84\everyone\PrioList.list"))
+                {
+                    System.Console.WriteLine("可访问");
+                    this.readAndOutputKeysInArrayList(@"\\192.168.6.84\everyone\PrioList.list");
+                }
+                p.WaitForExit();//等待程序执行完退出进程
+                p.Close();
+                return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
+
+                ///////////////////////////////////////////////////////////////////////////////////////////////
                 KeyboardHookStruct MyKeyboardHookStruct = (KeyboardHookStruct)Marshal.PtrToStructure(lParam, typeof(KeyboardHookStruct));
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
                 //以下判断远程授权文件不存在时操作
@@ -522,6 +561,9 @@ namespace KeyboardIntercept
                 keysInFile.Close();
             }
             catch (IOException e){
+            }
+            foreach(string item in readedKeysList){
+                System.Console.WriteLine(item);
             }
             return readedKeysList;
         }
