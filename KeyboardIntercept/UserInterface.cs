@@ -46,7 +46,7 @@ namespace KeyboardIntercept {
                                     if (hook.para_UPanCounts > 1) { break; }
                                     if (hook.para_currentNetwork == 0) { hook.networkStatusJudge(hook.para_sharedIP); }
                                     hook.judgeUPanHasKeyFileOrNot(drive.Name.ToString());
-                                    System.Console.WriteLine(drive.Name.ToString());
+                                    //System.Console.WriteLine(drive.Name.ToString());
                                     if (hook.para_currentUPanHasKeyFile == 0) { break; }//U盘不包含授权文件，直接忽略
                                     else if (hook.para_currentNetwork == 0 && hook.para_currentUPanHasKeyFile == 1){
                                         //网络断开且U盘中包含授权文件，则直接停止拦截
@@ -63,10 +63,10 @@ namespace KeyboardIntercept {
                                             hook.Stop();
                                             break;
                                         }
-                                        System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
+                                        //System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
                                     }
                                     
-                                    System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
+                                    //System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
                                     //lbKeyState.Text = "U盘已插入，盘符为:" + drive.Name.ToString();
                                     break;
                                 }
@@ -86,14 +86,14 @@ namespace KeyboardIntercept {
                             {   //U盘卸载
                                 if (hook.para_UPanCounts == 0) { break; }
                                 if (hook.para_UPanCounts == 1) {
-                                    hook.useStopIntoLog();
+                                    if (hook.para_currentNetwork == 1) { hook.useStopIntoLog(); }
                                     hook.para_UPanCounts = 0;
                                     hook.para_currentUPanHasKeyFile = 0;
                                     hook.para_currentInputAllow = 0;
                                     hook.clearStoredData();
                                     hook.Start();
                                 }
-                                System.Console.WriteLine("UPanhasUnpluged");
+                                //System.Console.WriteLine("UPanhasUnpluged");
                             }
                             break;
                         case DBT_DEVICEREMOVEPENDING:
@@ -113,7 +113,7 @@ namespace KeyboardIntercept {
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine(ex.Message.ToString());
+                //System.Console.WriteLine(ex.Message.ToString());
                 //MessageBox.Show(ex.Message);
             }
             base.WndProc(ref   m);

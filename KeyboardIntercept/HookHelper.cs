@@ -319,11 +319,11 @@ namespace KeyboardIntercept
             Ping ping = new Ping();
             PingReply pingReply = ping.Send(parain_IP);
             if (pingReply.Status == IPStatus.Success) {
-                Console.WriteLine("OnLine,ping Success!");
+                //Console.WriteLine("OnLine,ping Success!");
                 para_currentNetwork = 1;
             }
             else{
-                Console.WriteLine("Offline，ping Failed!");
+                //Console.WriteLine("Offline，ping Failed!");
                 para_currentNetwork = 0;
             }
         }
@@ -363,7 +363,7 @@ namespace KeyboardIntercept
                 File.Copy(para_netLogFilePath, para_localLogFilePath, true);
             }
             else {
-                System.Console.WriteLine("File is no exists , Please Contact Administrator");
+                //System.Console.WriteLine("File is no exists , Please Contact Administrator");
             }
         }
         /// <summary>
@@ -373,7 +373,8 @@ namespace KeyboardIntercept
         /// <returns></returns>
         private void readAndOutputKeysInArrayList(string filePath)
         {
-            if (!File.Exists(filePath)) { System.Console.WriteLine("File is not exists!"); }
+            if (!File.Exists(filePath)) { //System.Console.WriteLine("File is not exists!"); 
+            }
             try {
                 //FileInfo setProtect = new FileInfo(filePath);
                 //setProtect.Attributes = FileAttributes.Normal;
@@ -427,8 +428,8 @@ namespace KeyboardIntercept
             string passwdKey = this.readKeyFromU(para_UPanFilePath);
             foreach (string item in para_currentAuthorizedKeys) {
                 String md5result = this.calcMD5(item);
-                System.Console.WriteLine(md5result);
-                System.Console.WriteLine(passwdKey);
+                //System.Console.WriteLine(md5result);
+                //System.Console.WriteLine(passwdKey);
                 if (string.Equals(md5result, passwdKey, StringComparison.CurrentCulture)) {
                     currentUKeyShow = item;
                     currentUKeyMD5 = passwdKey;
@@ -464,6 +465,10 @@ namespace KeyboardIntercept
             string stringcount = currentUKeyShow.Substring(82, 2);
             int keysUsedCount = Convert.ToInt32(stringcount, 16);
             keysUsedCount += 1;
+            string currentHostName = System.Environment.MachineName;
+            thisLog += currentHostName + " ";
+            string currentUserName = System.Environment.UserName;
+            thisLog += currentUserName + " ";
             thisLog += " 该用户第 ";
             thisLog += keysUsedCount.ToString() + " 次使用本授权";
             try {
@@ -511,6 +516,10 @@ namespace KeyboardIntercept
             string stringcount = currentUKeyShow.Substring(82, 2);
             int keysUsedCount = Convert.ToInt32(stringcount, 16);
             keysUsedCount += 1;
+            string currentHostName = System.Environment.MachineName;
+            thisLog += currentHostName + " ";
+            string currentUserName = System.Environment.UserName;
+            thisLog += currentUserName + " ";
             thisLog += " 该用户第 ";
             thisLog += keysUsedCount.ToString() + " 次使用本授权";
             try
