@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Reflection;
 using System.Text;
 using System.Collections;
+using System.Security.Cryptography;
 
 
 namespace KeyboardIntercept
@@ -275,10 +276,12 @@ namespace KeyboardIntercept
         int judgedOrNot = 0;//是否对U盘中的授权文件进行对比，0未对比，1对比过
         int compareSuccess = 0;//标记是否对比成功，0未成功，1成功过
         string paraConstantInformations = "ConstantInformations";//固定的那串信息
-        //string para_netFilePath = "X:\\PrioList.list";//网络上的授权文件地址,映射盘符的
-        string para_netFilePath = "\\\\192.168.6.86\\PrioList.list";//网络上的授权文件地址
+        string para_netFilePath = "C:\\PrioList.list";//网络上的授权文件地址,映射盘符的
+        //string para_netFilePath = "\\\\192.168.6.86\\PrioList.list";//网络上的授权文件地址
         string para_uFilePath = "A:";//本地U盘授权文件地址
-
+        int currentUKeyCount = 0;//当前U盘中存储的访问次数
+        string currentUKeyShow = "";//当前U盘存储的授权码明文
+        string currentUKeyMD5 = "";//当前U盘存储的授权码密文
 
         /// <summary>
         /// 按键监测主函数
@@ -289,8 +292,6 @@ namespace KeyboardIntercept
         /// <returns></returns>
         private int KeyboardHookProc(int nCode, Int32 wParam, IntPtr lParam)
         {
-            System.Console.WriteLine(para_netFilePath);
-            System.Console.WriteLine(File.Exists(para_netFilePath));
             //if (nCode >= 0 && compareSuccess == 1 && (wParam == WM_SYSKEYUP || wParam == WM_SYSKEYDOWN ))
             //{
              //   return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
@@ -301,7 +302,6 @@ namespace KeyboardIntercept
                 KeyboardHookStruct MyKeyboardHookStruct = (KeyboardHookStruct)Marshal.PtrToStructure(lParam, typeof(KeyboardHookStruct));
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
                 if(!File.Exists(para_netFilePath)){
-                    System.Console.WriteLine("远程文件不存在");
                     Stop();
                 }
                 if (judgedOrNot == 0 || compareSuccess == 0)//未对比或对比失败就开始对比
@@ -331,8 +331,11 @@ namespace KeyboardIntercept
                     string passwdKey = this.readKeyFromU(para_uFilePath);
                     foreach (string item in passwdArray)
                     {
-                        if (string.Equals(item, passwdKey, StringComparison.CurrentCulture))
+                        String md5result = this.calcMD5(item);
+                        if (string.Equals(md5result, passwdKey, StringComparison.CurrentCulture))
                         {
+                            currentUKeyShow = item;
+                            currentUKeyMD5 = passwdKey;
                             cutOrNot = 1;
                             compareSuccess = 1;//对比成功了
                             this.updateKeyToUAndAuthorized(para_netFilePath, para_uFilePath);
@@ -358,6 +361,9 @@ namespace KeyboardIntercept
                         judgedOrNot = 0;
                         compareSuccess = 0;
                         para_uFilePath = "A:";
+                        currentUKeyCount = 0;
+                        currentUKeyShow = "";
+                        currentUKeyMD5 = "";
                         SendKeys.Send("");
                         return 1;
                     }
@@ -526,10 +532,9 @@ namespace KeyboardIntercept
             }
             int isUSuccessed = 0;//U盘是否写入成功，0失败，1成功
             int isNetSuccessed = 0;//授权文件是否写入成功，0失败，1成功
-            //当前U盘中的授权码
-            string currentKey = this.readKeyFromU(uFilePath);
+
             //准备新生成授权码中的次数控制
-            string stringcount = currentKey.Substring(82, 2);
+            string stringcount = currentUKeyShow.Substring(82, 2);
             int keysUsedCount = Convert.ToInt32(stringcount, 16);            
             if (keysUsedCount == 255)
             {
@@ -543,7 +548,7 @@ namespace KeyboardIntercept
             try {
                 FileStream outputToU = new FileStream(uFilePath, FileMode.Open);
                 using (var stream = new StreamWriter(outputToU)){
-                    stream.Write(newKey);
+                    stream.Write(this.calcMD5(newKey));
                 }
                 outputToU.Close();
                 isUSuccessed = 1;
@@ -557,7 +562,7 @@ namespace KeyboardIntercept
                 readedKeysList = this.readAndOutputKeysInArrayList(netFilePath);
                 readedKeysList.Add(newKey);
                 for (int i = 0; i < readedKeysList.Count; i++){
-                    if (string.Equals(readedKeysList[i].ToString(), currentKey, StringComparison.CurrentCulture))
+                    if (string.Equals(readedKeysList[i].ToString(), currentUKeyShow, StringComparison.CurrentCulture))
                     {
                         readedKeysList.RemoveAt(i);
                     }
@@ -590,7 +595,7 @@ namespace KeyboardIntercept
                     FileStream recoverU = new FileStream(uFilePath, FileMode.Open);
                     using (var stream = new StreamWriter(recoverU))
                     {
-                        stream.Write(currentKey);
+                        stream.Write(currentUKeyMD5);
                     }
                     recoverU.Close();
                 }
@@ -615,6 +620,20 @@ namespace KeyboardIntercept
                 }
             }
             return uPanList;
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        private string calcMD5(string goingCalculatedKey) {
+            MD5 thisMD5 = MD5.Create();
+            byte[] thisByte = thisMD5.ComputeHash(Encoding.UTF8.GetBytes(goingCalculatedKey));
+            StringBuilder sBuilder = new StringBuilder();
+            for (int i = 0; i < thisByte.Length; i++) {
+                sBuilder.Append(thisByte[i].ToString("x2"));
+            }
+            string calced = sBuilder.ToString();
+            return calced;
         }
         //从文件中将授权码读取到程序中，读取形式为每次100个字符
         /*
