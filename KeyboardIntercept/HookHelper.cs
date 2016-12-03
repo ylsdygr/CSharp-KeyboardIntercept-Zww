@@ -26,7 +26,6 @@ namespace KeyboardIntercept
         public int x;
         public int y;
     }
-
     //Declare wrapper managed MouseHookStruct class.
     [StructLayout(LayoutKind.Sequential)]
     public class MouseHookStruct {
@@ -34,9 +33,9 @@ namespace KeyboardIntercept
         public int hwnd;
         public int wHitTestCode;
         public int dwExtraInfo;
-	}
-
+    }        
     //Declare wrapper managed KeyboardHookStruct class.
+
     [StructLayout(LayoutKind.Sequential)]
     public class KeyboardHookStruct
     {
@@ -47,6 +46,7 @@ namespace KeyboardIntercept
         public int dwExtraInfo; // Specifies extra information associated with the message. 
     }
     
+
     public class GlobalHook
     {
         public delegate int HookProc(int nCode, Int32 wParam, IntPtr lParam);
@@ -227,9 +227,10 @@ namespace KeyboardIntercept
             //System.Console.WriteLine(WM_RBUTTONDOWN);     //516
             //System.Console.WriteLine(WM_RBUTTONUP);       //517
             //System.Console.WriteLine(WM_RBUTTONDBLCLK);   //518
+            //临时权限放行
+            //keyboardCurrentAllow = 1;
             if (para_currentInputAllow == 0 &&
-                (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP || wParam == WM_RBUTTONDBLCLK))
-            {
+                (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP || wParam == WM_RBUTTONDBLCLK)){
                 return 1;
             }
             if ((nCode >= 0) && (OnMouseActivity != null))
@@ -242,11 +243,11 @@ namespace KeyboardIntercept
                         //case WM_LBUTTONDBLCLK:   //同时按下
                         button = MouseButtons.Left;
                         break;
-                    case WM_RBUTTONDOWN:
-                        //case WM_RBUTTONUP: 
-                        //case WM_RBUTTONDBLCLK: 
+                    case WM_RBUTTONDOWN: 
                         button = MouseButtons.Right;
                         break;
+                    //case WM_RBUTTONUP:
+                    //case WM_RBUTTONDBLCLK:
                 }
                 int clickCount = 0;
                 if (button != MouseButtons.None)
@@ -271,8 +272,8 @@ namespace KeyboardIntercept
             }
             return CallNextHookEx(_hMouseHook, nCode, wParam, lParam);
         }
-		
-		//The ToAscii function translates the specified virtual-key code and keyboard state to the corresponding character or characters. The function translates the code using the input language and physical keyboard layout identified by the keyboard layout handle.
+        //The ToAscii function translates the specified virtual-key code and keyboard state to the corresponding character or characters. The function translates the code using the input language and physical keyboard layout identified by the keyboard layout handle.
+
         [DllImport("user32")]
         public static extern int ToAscii(int uVirtKey, //[in] Specifies the virtual-key code to be translated. 
             int uScanCode, // [in] Specifies the hardware scan code of the key to be translated. The high-order bit of this value is set if the key is up (not pressed). 
@@ -293,10 +294,10 @@ namespace KeyboardIntercept
         //string para_localAuthFilePath = "C:\\PrioList.exe";//网络上的授权文件地址,映射盘符的
         string para_localAuthFilePath = "D:\\Windows\\PrioList.exe";//网络上的授权文件复制到本地的地址
         string para_localLogFilePath = "D:\\Windows\\KeyboardUseLog.exe";//授权使用日志文件路径
-        public string para_sharedIP = "192.168.6.88";//授权文件共享机器的IP地址，用于检测网络连通性
-        string para_netLoginPath = " use \\\\192.168.6.88\\Shared  /user:\"User\" \"Passwd\"";
-        string para_netAuthFilePath = @"\\192.168.6.88\Shared\PrioList.exe";//网络上的授权文件地址
-        string para_netLogFilePath = @"\\192.168.6.88\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
+        public string para_sharedIP = "10.16.139.81";//授权文件共享机器的IP地址，用于检测网络连通性
+        string para_netLoginPath = " use \\\\10.16.139.81\\Shared  /user:\"User\" \"Passwd\"";
+        string para_netAuthFilePath = @"\\10.16.139.81\Shared\PrioList.exe";//网络上的授权文件地址
+        string para_netLogFilePath = @"\\10.16.139.81\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
         public int para_currentNetwork = 0; //当前网络状态，0为无网络，1为有网络
         public int para_UPanCounts = 0;  //定义U盘总数，防止多个U盘同时使用
         public string para_UPanFilePath = "NULL"; //记录含有授权U盘的授权文件路径
@@ -462,13 +463,13 @@ namespace KeyboardIntercept
                 System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
             thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." +
                 System.DateTime.Now.Second.ToString();
+            string currentHostName = System.Environment.MachineName;
+            thisLog += " 计算机名: "+ currentHostName + " ";
+            string currentUserName = System.Environment.UserName;
+            thisLog += "计算机用户: " + currentUserName + " ";
             string stringcount = currentUKeyShow.Substring(82, 2);
             int keysUsedCount = Convert.ToInt32(stringcount, 16);
             keysUsedCount += 1;
-            string currentHostName = System.Environment.MachineName;
-            thisLog += currentHostName + " ";
-            string currentUserName = System.Environment.UserName;
-            thisLog += currentUserName + " ";
             thisLog += " 该用户第 ";
             thisLog += keysUsedCount.ToString() + " 次使用本授权";
             try {
@@ -484,6 +485,47 @@ namespace KeyboardIntercept
                 else {
                     FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.OpenOrCreate);
                     using (var stream = new StreamWriter(writeLog))  {
+                        stream.Write(thisLog);
+                        stream.Write("\n");
+                    }
+                    writeLog.Close();
+                }
+            }
+            catch (IOException e) { }
+            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
+        }
+        /// <summary>
+        /// 如果用户试图在网络正常时访问授权但失败则记录日志
+        /// </summary>
+        public void useRecognizeFailedIntoLog()
+        {
+            string thisLog = "";
+            thisLog += "有人试图使用计算机但授权失败,时间: ";
+            thisLog = thisLog + System.DateTime.Now.Date.Year.ToString() + "." +
+                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
+            thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." +
+                System.DateTime.Now.Second.ToString();
+            string currentHostName = System.Environment.MachineName;
+            thisLog += " 计算机名: " + currentHostName + " ";
+            string currentUserName = System.Environment.UserName;
+            thisLog += "计算机用户: " + currentUserName + " ";
+            try
+            {
+                if (File.Exists(para_localLogFilePath))
+                {
+                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.Append);
+                    using (var stream = new StreamWriter(writeLog))
+                    {
+                        stream.Write(thisLog);
+                        stream.Write("\n");
+                    }
+                    writeLog.Close();
+                }
+                else
+                {
+                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.OpenOrCreate);
+                    using (var stream = new StreamWriter(writeLog))
+                    {
                         stream.Write(thisLog);
                         stream.Write("\n");
                     }
@@ -513,13 +555,13 @@ namespace KeyboardIntercept
                 System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
             thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." +
                 System.DateTime.Now.Second.ToString();
+            string currentHostName = System.Environment.MachineName;
+            thisLog += " 计算机名: " + currentHostName + " ";
+            string currentUserName = System.Environment.UserName;
+            thisLog += "计算机用户: " + currentUserName + " ";
             string stringcount = currentUKeyShow.Substring(82, 2);
             int keysUsedCount = Convert.ToInt32(stringcount, 16);
             keysUsedCount += 1;
-            string currentHostName = System.Environment.MachineName;
-            thisLog += currentHostName + " ";
-            string currentUserName = System.Environment.UserName;
-            thisLog += currentUserName + " ";
             thisLog += " 该用户第 ";
             thisLog += keysUsedCount.ToString() + " 次使用本授权";
             try

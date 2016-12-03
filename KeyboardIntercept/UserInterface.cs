@@ -63,6 +63,9 @@ namespace KeyboardIntercept {
                                             hook.Stop();
                                             break;
                                         }
+                                        else {
+                                            hook.useRecognizeFailedIntoLog();
+                                        }
                                         //System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
                                     }
                                     
