@@ -220,9 +220,15 @@ namespace KeyboardIntercept
         private int MouseHookProc(int nCode, Int32 wParam, IntPtr lParam)
         {
             string currentStatus = this.isUpan();
-            if (string.Equals("A:", currentStatus, StringComparison.CurrentCulture)){
-   //             keyboardCurrentAllow = 0;
+            currentStatus += "\\PrioData.exe";
+            if (!File.Exists(currentStatus)) {
+                keyboardCurrentAllow = 0;
+                //currentNetwork = 1;
             }
+           
+            //if (string.Equals("A:", currentStatus, StringComparison.CurrentCulture)){
+            //    keyboardCurrentAllow = 0;
+            //}
             //this.KeyboardHookProc(0,25,44456);
             //System.Console.WriteLine(WM_MOUSEMOVE);       //512
             //System.Console.WriteLine(WM_LBUTTONDOWN);     //513
@@ -297,12 +303,12 @@ namespace KeyboardIntercept
         int compareSuccess = 0;//标记是否对比成功，0未成功，1成功过
         string paraConstantInformations = "ConstantInformations";//固定的单串信息，字符必须是20个
         ////////////////////////////////////////////////////
-        //string para_localAuthFilePath = "C:\\PrioList.list";//网络上的授权文件地址,映射盘符的
-        string para_localAuthFilePath = "C:\\PrioList.list";//网络上的授权文件复制到本地的地址
-        string para_localLogFilePath = "C:\\KeyboardUse.chLog";//授权使用日志文件路径
-        string para_netLoginPath = " use \\\\192.168.191.3  /user:\"User\" \"Passwd\" ";
-        string para_netAuthFilePath = @"\\192.168.191.3\Shared\PrioList.list";//网络上的授权文件地址
-        string para_netLogFilePath = @"\\192.168.191.3\Shared\KeyboardUse.chLog";//授权使用日志文件路径
+        //string para_localAuthFilePath = "C:\\PrioList.exe";//网络上的授权文件地址,映射盘符的
+        string para_localAuthFilePath = "C:\\Windows\\PrioList.exe";//网络上的授权文件复制到本地的地址
+        string para_localLogFilePath = "C:\\Windows\\KeyboardUseLog.exe";//授权使用日志文件路径
+        string para_netLoginPath = " use \\\\192.168.6.86\\Shared  /user:\"User\" \"Passwd\"";
+        string para_netAuthFilePath = @"\\192.168.6.86\Shared\PrioList.exe";//网络上的授权文件地址
+        string para_netLogFilePath = @"\\192.168.6.86\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
         int accessNetFileOrNot = 0;//标记此次U盘接入是否与远程授权文件服务器进行过连接，0为未连接过，1为连接过。
         /////////////////////////////////////////////////////
         string para_uFilePath = "A:";//本地U盘授权文件地址，默认字符串仅判断是否被修改使用
@@ -310,6 +316,7 @@ namespace KeyboardIntercept
         string currentUKeyShow = "";//当前U盘存储的授权码明文
         string currentUKeyMD5 = "";//当前U盘存储的授权码密文
         int keyboardCurrentAllow = 0;//当前键盘是否允许输入，0是未允许，1是已允许
+        int currentNetwork = 1; //当前网络状态，0为无网络，1为有网络
 
         /// <summary>
         /// 按键监测主函数
@@ -332,34 +339,62 @@ namespace KeyboardIntercept
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
                 if (accessNetFileOrNot == 0 ){
                     accessNetFileOrNot = 1;
-                    System.Diagnostics.Process pa = new System.Diagnostics.Process();
-                    //System.Diagnostics.Process.Start("net.exe", para_netLoginPath);
-                    pa.StartInfo.FileName = "net.exe";
-                    pa.StartInfo.UseShellExecute = false;
-                    pa.StartInfo.RedirectStandardInput = true;//接受来自调用程序的输入信息
-                    pa.StartInfo.RedirectStandardOutput = false;//由调用程序获取输出信息
-                    pa.StartInfo.RedirectStandardError = true;//重定向标准错误输出
-                    pa.StartInfo.CreateNoWindow = true;//不显示程序窗口
-                    pa.Start();
-                    pa.StandardInput.WriteLine(para_netLoginPath + "&&exit");
-                    pa.StandardInput.AutoFlush = true;
-                    System.Console.WriteLine(para_netLoginPath);
+                    //System.Diagnostics.Process p = new System.Diagnostics.Process();
+                    System.Diagnostics.Process.Start("net.exe", para_netLoginPath);
+                    //p.StartInfo.FileName = "net.exe";
+                    //p.StartInfo.UseShellExecute = false;
+                    //p.StartInfo.RedirectStandardInput = true;//接受来自调用程序的输入信息
+                    //p.StartInfo.RedirectStandardOutput = false;//由调用程序获取输出信息
+                    //p.StartInfo.RedirectStandardError = true;//重定向标准错误输出
+                    //p.StartInfo.CreateNoWindow = true;//不显示程序窗口
+                    //p.Start();
+                    //p.StandardInput.WriteLine(para_netLoginPath + "&&exit");
+                    //p.StandardInput.AutoFlush = true;
                     //System.Console.WriteLine(p.StandardOutput.ReadToEnd());
                     if (File.Exists(para_netAuthFilePath))
                     {
+                        currentNetwork = 1;
                         File.Copy(para_netAuthFilePath, para_localAuthFilePath, true);
                         File.Copy(para_netLogFilePath, para_localLogFilePath, true);
                     }
                     else {
-                        //Stop();//停止键盘控制，此后网络恢复后不再控制
-                        keyboardCurrentAllow = 1;
-                        return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);//授权文件恢复后，继续拦截键盘
+                        currentNetwork = 0;
+                        string hasUpan = this.isUpan();
+                        if (string.Equals("A:", hasUpan, StringComparison.CurrentCulture)){
+                            keyboardCurrentAllow = 0;
+                            SendKeys.Send("");
+                            return 1;
+                        }
+                        else{
+                            para_uFilePath = hasUpan;
+                            para_uFilePath += "\\PrioData.exe";
+                            if (File.Exists(para_uFilePath))
+                            {
+                                //Stop();//停止键盘控制，此后网络恢复后不再控制
+                                keyboardCurrentAllow = 1;
+                                return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);//授权文件恢复后，继续拦截键盘
+                            }
+                            else {
+                                keyboardCurrentAllow = 0;
+                                SendKeys.Send("");
+                                return 1;
+                            }
+                        }
                     }
-                    pa.WaitForExit();//等待程序执行完退出进程
-                    pa.Close();
+                    //p.WaitForExit();//等待程序执行完退出进程
+                    //p.Close();
                 }
-                if (judgedOrNot == 0 || compareSuccess == 0)//未对比或对比失败就开始对比
+                if ((judgedOrNot == 0 || compareSuccess == 0) && accessNetFileOrNot == 1)//未对比或对比失败就开始对比
                 {
+                    string wrongNetHasUpan = this.isUpan();
+                    wrongNetHasUpan += "\\PrioData.exe";
+                    if (currentNetwork == 0 && File.Exists(wrongNetHasUpan))
+                    {
+                        keyboardCurrentAllow = 1;
+                        return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
+                    }
+                    else { keyboardCurrentAllow = 0; }
+
                     judgedOrNot = 1;//标记已对比过
                     string hasUpan = this.isUpan();
                     if (string.Equals("A:", hasUpan, StringComparison.CurrentCulture))
@@ -371,8 +406,8 @@ namespace KeyboardIntercept
                     else {
                         para_uFilePath = hasUpan;
                     }
-                    para_uFilePath += "\\PrioData.list";
-                    if (para_uFilePath == "A:\\PrioData.list")
+                    para_uFilePath += "\\PrioData.exe";
+                    if (para_uFilePath == "A:\\PrioData.exe")
                     {
                         keyboardCurrentAllow = 0;
                         SendKeys.Send("");
@@ -398,7 +433,6 @@ namespace KeyboardIntercept
                             keyboardCurrentAllow = 1;//停止拦截鼠标右键
                             this.updateKeyToUAndAuthorized(para_localAuthFilePath, para_uFilePath);
                             this.useLogGenerator();
-                            File.Copy(para_localAuthFilePath, para_netAuthFilePath, true);
                             File.Copy(para_localLogFilePath, para_netLogFilePath, true);
                             File.Delete(para_localAuthFilePath);
                             File.Delete(para_localLogFilePath);
@@ -415,9 +449,19 @@ namespace KeyboardIntercept
                 }
                 else
                 { //如果已对比过，则根据对比结果来判断是否要将以后的按键发送。
+
+                    if (currentNetwork == 0)
+                    {
+                        string wrongNetHasUpan = this.isUpan();
+                        wrongNetHasUpan += "\\PrioData.exe";
+                        if (File.Exists(wrongNetHasUpan))
+                        {
+                            return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
+                        }
+                    }
                     para_uFilePath = this.isUpan();
-                    para_uFilePath += "\\PrioData.list";
-                    if (para_uFilePath == "A:\\PrioData.list" || !File.Exists(para_uFilePath))
+                    para_uFilePath += "\\PrioData.exe";
+                    if (para_uFilePath == "A:\\PrioData.exe" || !File.Exists(para_uFilePath))
                     {
                         //U盘拨出，将三个标识重置
                         cutOrNot = 0;
@@ -648,24 +692,20 @@ namespace KeyboardIntercept
                         FileInfo setProtect = new FileInfo(para_localAuthFilePath);
                         setProtect.Attributes = FileAttributes.Normal;
                         FileStream outputToNet = new FileStream(netFilePath, FileMode.Open);
-                        using (var stream = new StreamWriter(outputToNet))
-                        {
-                            foreach (string item in readedKeysList)
-                            {
+                        using (var stream = new StreamWriter(outputToNet)){
+                            foreach (string item in readedKeysList){
                                 stream.Write(item);
                                 stream.Write("\n");
                             }
                         }
                         outputToNet.Close();
                         isNetSuccessed = 1;
-
-                        
+                        File.Copy(para_localAuthFilePath, para_netAuthFilePath, true);
                         setProtect.Attributes = FileAttributes.Hidden ;
                         return 1;
                     }
                 }
-                catch (IOException e)
-                {
+                catch (IOException e){
                     isNetSuccessed = 0;
                 }
             }
@@ -700,7 +740,6 @@ namespace KeyboardIntercept
                     uPanList = drive.Name.ToString();
                 }
             }
-            uPanList = "E:";
             return uPanList;
         }
         /// <summary>
