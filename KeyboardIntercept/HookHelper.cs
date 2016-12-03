@@ -219,7 +219,22 @@ namespace KeyboardIntercept
         private const int WM_MBUTTONDBLCLK = 0x209;
         private int MouseHookProc(int nCode, Int32 wParam, IntPtr lParam)
         {
-            return CallNextHookEx(_hMouseHook, nCode, wParam, lParam);
+            string currentStatus = this.isUpan();
+            if (string.Equals("A:", currentStatus, StringComparison.CurrentCulture)){
+                keyboardCurrentAllow = 0;
+            }
+            //this.KeyboardHookProc(0,25,44456);
+            //System.Console.WriteLine(WM_MOUSEMOVE);       //512
+            //System.Console.WriteLine(WM_LBUTTONDOWN);     //513
+            //System.Console.WriteLine(WM_LBUTTONUP);       //514
+            //System.Console.WriteLine(WM_LBUTTONDBLCLK);   //515
+            //System.Console.WriteLine(WM_RBUTTONDOWN);     //516
+            //System.Console.WriteLine(WM_RBUTTONUP);       //517
+            //System.Console.WriteLine(WM_RBUTTONDBLCLK);   //518
+            if (keyboardCurrentAllow == 0 &&
+                (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP || wParam == WM_RBUTTONDBLCLK)){
+                return 1;
+            }
             if ((nCode >= 0) && (OnMouseActivity != null))
             {
                 MouseButtons button = MouseButtons.None;
@@ -238,10 +253,14 @@ namespace KeyboardIntercept
                 }
                 int clickCount = 0;
                 if (button != MouseButtons.None)
-                    if (wParam == WM_LBUTTONDBLCLK || wParam == WM_RBUTTONDBLCLK)
+                {
+                    if (wParam == WM_LBUTTONDBLCLK || wParam == WM_RBUTTONDBLCLK){
                         clickCount = 2;
-                    else clickCount = 1;
-
+                    }
+                    else{
+                        clickCount = 1;
+                    }
+                }
                 //Marshall the data from callback.
                 MouseHookStruct MyMouseHookStruct =
                     (MouseHookStruct)Marshal.PtrToStructure(lParam, typeof(MouseHookStruct));
@@ -284,6 +303,7 @@ namespace KeyboardIntercept
         int currentUKeyCount = 0;//当前U盘中存储的访问次数
         string currentUKeyShow = "";//当前U盘存储的授权码明文
         string currentUKeyMD5 = "";//当前U盘存储的授权码密文
+        int keyboardCurrentAllow = 0;//当前键盘是否允许输入，0是未允许，1是已允许
 
         /// <summary>
         /// 按键监测主函数
@@ -306,6 +326,7 @@ namespace KeyboardIntercept
                 //以下判断远程授权文件不存在时操作
                 if(!File.Exists(para_netFilePath)){
                     //Stop();//停止键盘控制，此后网络恢复后不再控制
+                    keyboardCurrentAllow = 1;
                     return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);//远程授权文件恢复后，继续拦截键盘
                 }
                 if (judgedOrNot == 0 || compareSuccess == 0)//未对比或对比失败就开始对比
@@ -314,6 +335,7 @@ namespace KeyboardIntercept
                     string hasUpan = this.isUpan();
                     if (string.Equals("A:", hasUpan, StringComparison.CurrentCulture))
                     {
+                        keyboardCurrentAllow = 0;
                         SendKeys.Send("");
                         return 1;
                     }
@@ -323,11 +345,13 @@ namespace KeyboardIntercept
                     para_uFilePath += "\\PrioData.list";
                     if (para_uFilePath == "A:\\PrioData.list")
                     {
+                        keyboardCurrentAllow = 0;
                         SendKeys.Send("");
                         return 1;
                     }
                     //以下判断本地U盘中是否有授权文件  及 远程授权列表是否可访问
                     if (!File.Exists(para_uFilePath) || !File.Exists(para_netFilePath)) {
+                        keyboardCurrentAllow = 0;
                         SendKeys.Send("");
                         return 1;
                     }
@@ -342,6 +366,7 @@ namespace KeyboardIntercept
                             currentUKeyMD5 = passwdKey;
                             cutOrNot = 1;
                             compareSuccess = 1;//对比成功了
+                            keyboardCurrentAllow = 1;//停止拦截鼠标右键
                             this.updateKeyToUAndAuthorized(para_netFilePath, para_uFilePath);
                             this.useLogGenerator();
                         }
@@ -365,6 +390,7 @@ namespace KeyboardIntercept
                         cutOrNot = 0;
                         judgedOrNot = 0;
                         compareSuccess = 0;
+                        keyboardCurrentAllow = 0;
                         para_uFilePath = "A:";
                         currentUKeyCount = 0;
                         currentUKeyShow = "";
@@ -376,6 +402,7 @@ namespace KeyboardIntercept
                         return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
                     }
                 }
+                keyboardCurrentAllow = 0;
             }
             return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
         }
@@ -401,8 +428,7 @@ namespace KeyboardIntercept
             authorizedKey += "0x";
             authorizedKey += calcCount.ToString("x2");
             authorizedKey += randomValuesGenerator(14);
-            authorizedKey += this.calculateCheckCode(authorizedKey).ToString();
-            
+            authorizedKey += this.calculateCheckCode(authorizedKey).ToString();           
             return authorizedKey;
         }
         /// <summary>
