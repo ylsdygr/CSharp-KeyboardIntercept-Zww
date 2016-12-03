@@ -32,12 +32,9 @@ namespace KeyboardIntercept {
 
         protected override void WndProc(ref   Message m)
         {
-            try
-            {
-                if (m.Msg == WM_DEVICECHANGE)
-                {
-                    switch (m.WParam.ToInt32())
-                    {
+            try {
+                if (m.Msg == WM_DEVICECHANGE) {
+                    switch (m.WParam.ToInt32()) {
                         case WM_DEVICECHANGE:
                             break;
                         case DBT_DEVICEARRIVAL://U盘插入
@@ -46,6 +43,29 @@ namespace KeyboardIntercept {
                             {
                                 if (drive.DriveType == DriveType.Removable)
                                 {
+                                    if (hook.para_UPanCounts > 1) { break; }
+                                    if (hook.para_currentNetwork == 0) { hook.networkStatusJudge(hook.para_sharedIP); }
+                                    hook.judgeUPanHasKeyFileOrNot(drive.Name.ToString());
+                                    System.Console.WriteLine(drive.Name.ToString());
+                                    if (hook.para_currentUPanHasKeyFile == 0) { break; }//U盘不包含授权文件，直接忽略
+                                    else if (hook.para_currentNetwork == 0 && hook.para_currentUPanHasKeyFile == 1){
+                                        //网络断开且U盘中包含授权文件，则直接停止拦截
+                                        hook.para_UPanCounts = 1;
+                                        hook.Stop();
+                                        break;
+                                    }
+                                    else{//网络正常且U盘中包含授权文件的处理
+                                        hook.authorizedKeyFilesLogFileCopy();
+                                        hook.compareAuthorizedKeysUtoNet();
+                                        if (hook.para_currentInputAllow == 1) {
+                                            hook.para_UPanCounts = 1;
+                                            hook.updateProcess();
+                                            hook.Stop();
+                                            break;
+                                        }
+                                        System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
+                                    }
+                                    
                                     System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
                                     //lbKeyState.Text = "U盘已插入，盘符为:" + drive.Name.ToString();
                                     break;
@@ -62,9 +82,19 @@ namespace KeyboardIntercept {
                             break;
                         case DBT_DEVICEQUERYREMOVEFAILED:
                             break;
-                        case DBT_DEVICEREMOVECOMPLETE:   //U盘卸载
-                            System.Console.WriteLine("UPanhasUnpluged");
-                            //label1.Text = "";
+                        case DBT_DEVICEREMOVECOMPLETE:
+                            {   //U盘卸载
+                                if (hook.para_UPanCounts == 0) { break; }
+                                if (hook.para_UPanCounts == 1) {
+                                    hook.useStopIntoLog();
+                                    hook.para_UPanCounts = 0;
+                                    hook.para_currentUPanHasKeyFile = 0;
+                                    hook.para_currentInputAllow = 0;
+                                    hook.clearStoredData();
+                                    hook.Start();
+                                }
+                                System.Console.WriteLine("UPanhasUnpluged");
+                            }
                             break;
                         case DBT_DEVICEREMOVEPENDING:
                             break;
@@ -83,7 +113,8 @@ namespace KeyboardIntercept {
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message);
+                System.Console.WriteLine(ex.Message.ToString());
+                //MessageBox.Show(ex.Message);
             }
             base.WndProc(ref   m);
         }

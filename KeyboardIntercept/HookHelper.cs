@@ -8,7 +8,7 @@ using System.Text;
 using System.Collections;
 using System.Security.Cryptography;
 using System.Security.AccessControl;
-using System.Net;
+using System.Net.NetworkInformation;
 
 namespace KeyboardIntercept
 {
@@ -218,17 +218,7 @@ namespace KeyboardIntercept
         private const int WM_RBUTTONDBLCLK = 0x206;
         private const int WM_MBUTTONDBLCLK = 0x209;
         private int MouseHookProc(int nCode, Int32 wParam, IntPtr lParam)
-        {
-            string currentStatus = this.isUpan();
-            currentStatus += "\\PrioData.exe";
-            if (!File.Exists(currentStatus)) {
-                keyboardCurrentAllow = 0;
-                //currentNetwork = 1;
-            }
-           
-            //if (string.Equals("A:", currentStatus, StringComparison.CurrentCulture)){
-            //    keyboardCurrentAllow = 0;
-            //}
+        {   
             //this.KeyboardHookProc(0,25,44456);
             //System.Console.WriteLine(WM_MOUSEMOVE);       //512
             //System.Console.WriteLine(WM_LBUTTONDOWN);     //513
@@ -237,8 +227,9 @@ namespace KeyboardIntercept
             //System.Console.WriteLine(WM_RBUTTONDOWN);     //516
             //System.Console.WriteLine(WM_RBUTTONUP);       //517
             //System.Console.WriteLine(WM_RBUTTONDBLCLK);   //518
-            if (keyboardCurrentAllow == 0 &&
-                (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP || wParam == WM_RBUTTONDBLCLK)){
+            if (para_currentInputAllow == 0 &&
+                (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP || wParam == WM_RBUTTONDBLCLK))
+            {
                 return 1;
             }
             if ((nCode >= 0) && (OnMouseActivity != null))
@@ -296,28 +287,461 @@ namespace KeyboardIntercept
         private const int WM_KEYUP = 0x101;
         private const int WM_SYSKEYDOWN = 0x104;
         private const int WM_SYSKEYUP = 0x105;
-        
-        //以下两个定义的标记在U盘拨出时会清除。
-        int cutOrNot = 0;//判断接入U盘后按的第一个触发授权检查的键是否生效
-        int judgedOrNot = 0;//是否对U盘中的授权文件进行对比，0未对比，1对比过
-        int compareSuccess = 0;//标记是否对比成功，0未成功，1成功过
-        string paraConstantInformations = "ConstantInformations";//固定的单串信息，字符必须是20个
-        ////////////////////////////////////////////////////
+        //////////////////////////////
+        ////////参数定义区域///////////
+        //////////////////////////////
         //string para_localAuthFilePath = "C:\\PrioList.exe";//网络上的授权文件地址,映射盘符的
-        string para_localAuthFilePath = "C:\\Windows\\PrioList.exe";//网络上的授权文件复制到本地的地址
-        string para_localLogFilePath = "C:\\Windows\\KeyboardUseLog.exe";//授权使用日志文件路径
-        string para_netLoginPath = " use \\\\192.168.1.173\\Shared  /user:\"User\" \"Passwd\"";
-        string para_netAuthFilePath = @"\\192.168.1.173\Shared\PrioList.exe";//网络上的授权文件地址
-        string para_netLogFilePath = @"\\192.168.1.173\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
-        int accessNetFileOrNot = 0;//标记此次U盘接入是否与远程授权文件服务器进行过连接，0为未连接过，1为连接过。
-        /////////////////////////////////////////////////////
-        string para_uFilePath = "A:";//本地U盘授权文件地址，默认字符串仅判断是否被修改使用
-        int currentUKeyCount = 0;//当前U盘中存储的访问次数
+        string para_localAuthFilePath = "D:\\Windows\\PrioList.exe";//网络上的授权文件复制到本地的地址
+        string para_localLogFilePath = "D:\\Windows\\KeyboardUseLog.exe";//授权使用日志文件路径
+        public string para_sharedIP = "192.168.6.88";//授权文件共享机器的IP地址，用于检测网络连通性
+        string para_netLoginPath = " use \\\\192.168.6.88\\Shared  /user:\"User\" \"Passwd\"";
+        string para_netAuthFilePath = @"\\192.168.6.88\Shared\PrioList.exe";//网络上的授权文件地址
+        string para_netLogFilePath = @"\\192.168.6.88\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
+        public int para_currentNetwork = 0; //当前网络状态，0为无网络，1为有网络
+        public int para_UPanCounts = 0;  //定义U盘总数，防止多个U盘同时使用
+        public string para_UPanFilePath = "NULL"; //记录含有授权U盘的授权文件路径
+        public int para_currentUPanHasKeyFile = 0;//记录当前U盘是否含有授权文件
+        ArrayList para_currentAuthorizedKeys = new ArrayList();
+        public int para_currentInputAllow = 0;//当前键盘是否允许输入，0是未允许，1是已允许
         string currentUKeyShow = "";//当前U盘存储的授权码明文
         string currentUKeyMD5 = "";//当前U盘存储的授权码密文
-        int keyboardCurrentAllow = 0;//当前键盘是否允许输入，0是未允许，1是已允许
-        int currentNetwork = 1; //当前网络状态，0为无网络，1为有网络
+        //////////////////////////////
+        ////////参数定义区域///////////
+        //////////////////////////////
 
+        /// <summary>
+        /// 判断当前共享授权文件的电脑是否在线
+        /// </summary>
+        /// <param name="parain_IP"></param>
+        /// <returns></returns>
+        public void networkStatusJudge(string parain_IP)
+        {
+            Ping ping = new Ping();
+            PingReply pingReply = ping.Send(parain_IP);
+            if (pingReply.Status == IPStatus.Success) {
+                Console.WriteLine("OnLine,ping Success!");
+                para_currentNetwork = 1;
+            }
+            else{
+                Console.WriteLine("Offline，ping Failed!");
+                para_currentNetwork = 0;
+            }
+        }
+        /// <summary>
+        /// 记录下当前授权U盘的盘符
+        /// </summary>
+        /// <param name="parain_UPanLetter"></param>
+        public void judgeUPanHasKeyFileOrNot(string parain_UPanLetter)
+        {
+            string temp_UPanKeyFile = parain_UPanLetter;
+            temp_UPanKeyFile += "PrioData.exe";
+            if (File.Exists(temp_UPanKeyFile)) {
+                para_UPanFilePath = temp_UPanKeyFile;
+                para_currentUPanHasKeyFile = 1;
+            }
+            else { }
+        }
+        /// <summary>
+        /// 将远程授权文件及使用日志文件复制到本地
+        /// </summary>
+        public void authorizedKeyFilesLogFileCopy()
+        {
+            //System.Diagnostics.Process p = new System.Diagnostics.Process();
+            System.Diagnostics.Process.Start("net.exe", para_netLoginPath);
+            //p.StartInfo.FileName = "net.exe";
+            //p.StartInfo.UseShellExecute = false;
+            //p.StartInfo.RedirectStandardInput = true;//接受来自调用程序的输入信息
+            //p.StartInfo.RedirectStandardOutput = false;//由调用程序获取输出信息
+            //p.StartInfo.RedirectStandardError = true;//重定向标准错误输出
+            //p.StartInfo.CreateNoWindow = true;//不显示程序窗口
+            //p.Start();
+            //p.StandardInput.WriteLine(para_netLoginPath + "&&exit");
+            //p.StandardInput.AutoFlush = true;
+            //System.Console.WriteLine(p.StandardOutput.ReadToEnd());
+            if (File.Exists(para_netAuthFilePath)) {
+                File.Copy(para_netAuthFilePath, para_localAuthFilePath, true);
+                File.Copy(para_netLogFilePath, para_localLogFilePath, true);
+            }
+            else {
+                System.Console.WriteLine("File is no exists , Please Contact Administrator");
+            }
+        }
+        /// <summary>
+        /// 以每次读取一行的形式读取授权码,返回ArrayList
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <returns></returns>
+        private void readAndOutputKeysInArrayList(string filePath)
+        {
+            if (!File.Exists(filePath)) { System.Console.WriteLine("File is not exists!"); }
+            try {
+                //FileInfo setProtect = new FileInfo(filePath);
+                //setProtect.Attributes = FileAttributes.Normal;
+                FileStream keysInFile = new FileStream(filePath, FileMode.Open);
+                using (var stream = new StreamReader(keysInFile)) {
+                    while (!stream.EndOfStream) {
+                        para_currentAuthorizedKeys.Add(stream.ReadLine());
+                    }
+                }
+                keysInFile.Close();
+            }
+            catch (IOException e) { }
+        }
+        /// <summary>
+        /// 当U盘拔出恢复各变量的初始值,将程序重置为刚启动时。
+        /// </summary>
+        public void clearStoredData()
+        {
+            para_currentAuthorizedKeys.Clear();
+        }
+        /// <summary>
+        /// 读取授权U盘中的一行授权码
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <returns></returns>
+        private string readKeyFromU(string filePath)
+        {
+            String readedKeys = "";
+            if (!File.Exists(filePath)) {
+                return readedKeys;
+            }
+            try {
+                FileStream keysInFile = new FileStream(filePath, FileMode.Open);
+                using (var stream = new StreamReader(keysInFile)) {
+                    while (!stream.EndOfStream) {
+                        readedKeys = stream.ReadLine();
+                    }
+                }
+                keysInFile.Close();
+            }
+            catch (IOException e) { }
+            return readedKeys;
+        }
+        /// <summary>
+        /// 对比U盘中的授权码与授权文件中的条目
+        /// </summary>
+        public void compareAuthorizedKeysUtoNet()
+        {
+            this.readAndOutputKeysInArrayList(para_localAuthFilePath);
+            //string[] passwdArray = this.readAndOutputKeysIn(para_localAuthFilePath);
+            string passwdKey = this.readKeyFromU(para_UPanFilePath);
+            foreach (string item in para_currentAuthorizedKeys) {
+                String md5result = this.calcMD5(item);
+                System.Console.WriteLine(md5result);
+                System.Console.WriteLine(passwdKey);
+                if (string.Equals(md5result, passwdKey, StringComparison.CurrentCulture)) {
+                    currentUKeyShow = item;
+                    currentUKeyMD5 = passwdKey;
+                    para_currentInputAllow = 1;
+                }
+            }
+        }
+        /// <summary>
+        /// 处理授权码更新
+        /// </summary>
+        public void updateProcess()
+        {
+            this.useStartIntoLog();
+            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
+            this.updateKeyToUAndAuthorized(para_localAuthFilePath, para_UPanFilePath);
+            File.Delete(para_localAuthFilePath);
+            File.Delete(para_localLogFilePath);
+        }
+        /// <summary>
+        /// 授权开始使用记录
+        /// </summary>
+        private void useStartIntoLog()
+        {
+            string thisLog = "用户：";
+            string nameCharacters = currentUKeyShow.Substring(18, 2);
+            int nameCharactersCount = Convert.ToInt32(nameCharacters, 16);
+            thisLog += currentUKeyShow.Substring(20, nameCharactersCount) + " ";
+            thisLog += "开始使用时间：";
+            thisLog = thisLog + System.DateTime.Now.Date.Year.ToString() + "." +
+                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
+            thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." +
+                System.DateTime.Now.Second.ToString();
+            string stringcount = currentUKeyShow.Substring(82, 2);
+            int keysUsedCount = Convert.ToInt32(stringcount, 16);
+            keysUsedCount += 1;
+            thisLog += " 该用户第 ";
+            thisLog += keysUsedCount.ToString() + " 次使用本授权";
+            try {
+                if (File.Exists(para_localLogFilePath))
+                {
+                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.Append);
+                    using (var stream = new StreamWriter(writeLog)) {
+                        stream.Write(thisLog);
+                        stream.Write("\n");
+                    }
+                    writeLog.Close();
+                }
+                else {
+                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.OpenOrCreate);
+                    using (var stream = new StreamWriter(writeLog))  {
+                        stream.Write(thisLog);
+                        stream.Write("\n");
+                    }
+                    writeLog.Close();
+                }
+            }
+            catch (IOException e) { }
+            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
+        }
+        /// <summary>
+        /// 授权停止时间
+        /// </summary>
+        public void useStopIntoLog()
+        {
+            System.Diagnostics.Process.Start("net.exe", para_netLoginPath);
+            if (File.Exists(para_netLogFilePath))
+            {
+                File.Copy(para_netLogFilePath, para_localLogFilePath, true);
+            }
+            else { return; }
+            string thisLog = "用户：";
+            string nameCharacters = currentUKeyShow.Substring(18, 2);
+            int nameCharactersCount = Convert.ToInt32(nameCharacters, 16);
+            thisLog += currentUKeyShow.Substring(20, nameCharactersCount) + " ";
+            thisLog += "停止使用时间：";
+            thisLog = thisLog + System.DateTime.Now.Date.Year.ToString() + "." +
+                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
+            thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." +
+                System.DateTime.Now.Second.ToString();
+            string stringcount = currentUKeyShow.Substring(82, 2);
+            int keysUsedCount = Convert.ToInt32(stringcount, 16);
+            keysUsedCount += 1;
+            thisLog += " 该用户第 ";
+            thisLog += keysUsedCount.ToString() + " 次使用本授权";
+            try
+            {
+                if (File.Exists(para_localLogFilePath)) {
+                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.Append);
+                    using (var stream = new StreamWriter(writeLog)) {
+                        stream.Write(thisLog);
+                        stream.Write("\n");
+                    }
+                    writeLog.Close();
+                }
+                else {
+                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.OpenOrCreate);
+                    using (var stream = new StreamWriter(writeLog))
+                    {
+                        stream.Write(thisLog);
+                        stream.Write("\n");
+                    }
+                    writeLog.Close();
+                }
+            }
+            catch (IOException e) { }
+            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
+        }
+        /// <summary>
+        /// 授权记录生成器
+        /// </summary>
+        /// <param name="ConstantInformations"></param>
+        /// <param name="calcCount"></param>
+        /// <returns></returns>
+        private string authorizedKeysGenerator(int nameNumber, string ConstantInformations, int calcCount)
+        {
+            string authorizedKey = String.Empty;
+            authorizedKey = randomValuesGenerator(18);
+            string nameCharacters = nameNumber.ToString("x2");
+            authorizedKey += nameCharacters;
+            authorizedKey += ConstantInformations;
+            int afterNameRandomChars = 30 - nameNumber;
+            authorizedKey += randomValuesGenerator(afterNameRandomChars);
+            string yearFoutBits = System.DateTime.Now.Date.Year.ToString();
+            authorizedKey += yearFoutBits.Substring(2, 2);
+            authorizedKey += randomValuesGenerator(8);
+            int month_bit = System.DateTime.Now.Date.Month;
+            string month_2bit = month_bit.ToString();
+            if (month_bit < 10) { month_2bit = "0" + System.DateTime.Now.Date.Month.ToString(); }
+            authorizedKey += month_2bit;
+            authorizedKey += randomValuesGenerator(8);
+            int day_bit = System.DateTime.Now.Date.Day;
+            string day_2bit = day_bit.ToString();
+            if (day_bit < 10) { day_2bit = "0" + System.DateTime.Now.Date.Day.ToString(); }
+            authorizedKey += day_2bit;
+            authorizedKey += randomValuesGenerator(10);
+            //authorizedKey += "0x";
+            authorizedKey += calcCount.ToString("x2");
+            authorizedKey += randomValuesGenerator(14);
+            authorizedKey += this.calculateCheckCode(authorizedKey).ToString();
+            return authorizedKey;
+        }
+        /// <summary>
+        /// 产生新的授权码存储在U盘中与授权码文件中
+        /// </summary>
+        /// <param name="netFilePath"></param>
+        /// <param name="uFilePath"></param>
+        /// <returns></returns>
+        private int updateKeyToUAndAuthorized(string netFilePath, string uFilePath)
+        {
+            //-------------------写入U盘-----------------//
+            if (!File.Exists(netFilePath) || !File.Exists(uFilePath)) {
+                return 0;
+            }
+            int isUSuccessed = 0;//U盘是否写入成功，0失败，1成功
+            int isNetSuccessed = 0;//授权文件是否写入成功，0失败，1成功
+
+            //准备新生成授权码中的次数控制
+            string stringcount = currentUKeyShow.Substring(82, 2);
+            int keysUsedCount = Convert.ToInt32(stringcount, 16);
+            if (keysUsedCount == 255)
+            {
+                keysUsedCount = 0;
+            }
+            else
+            {
+                keysUsedCount += 1;
+            }
+            //准备新生成授权码中的人名字母数
+            string nameCharacters = currentUKeyShow.Substring(18, 2);
+            int nameCharactersCount = Convert.ToInt32(nameCharacters, 16);
+            //准备新生成授权码中的人名信息
+            string stringConstantInformationFromU = currentUKeyShow.Substring(20, nameCharactersCount);
+            //新生成一串授权码
+            string newKey = this.authorizedKeysGenerator(nameCharactersCount, stringConstantInformationFromU, keysUsedCount);
+            try
+            {
+                FileStream outputToU = new FileStream(uFilePath, FileMode.Open);
+                using (var stream = new StreamWriter(outputToU))
+                {
+                    stream.Write(this.calcMD5(newKey));
+                }
+                outputToU.Close();
+                isUSuccessed = 1;
+            }
+            catch (IOException e)
+            {
+                isUSuccessed = 0;
+            }
+            //-------------------写入U盘线束-----------------//
+            //-------------------写入远程授权文件-----------------//
+            if (isUSuccessed == 1)
+            {//U盘写入成功后写入授权文件
+                ArrayList readedKeysList = new ArrayList();
+                readedKeysList = para_currentAuthorizedKeys;
+                readedKeysList.Add(newKey);
+                for (int i = 0; i < readedKeysList.Count; i++)
+                {
+                    if (string.Equals(readedKeysList[i].ToString(), currentUKeyShow, StringComparison.CurrentCulture))
+                    {
+                        readedKeysList.RemoveAt(i);
+                    }
+                }
+                try
+                {
+                    if (File.Exists(netFilePath))
+                    {
+                        FileInfo setProtect = new FileInfo(para_localAuthFilePath);
+                        setProtect.Attributes = FileAttributes.Normal;
+                        FileStream outputToNet = new FileStream(netFilePath, FileMode.Open);
+                        using (var stream = new StreamWriter(outputToNet))
+                        {
+                            foreach (string item in readedKeysList)
+                            {
+                                stream.Write(item);
+                                stream.Write("\n");
+                            }
+                        }
+                        outputToNet.Close();
+                        isNetSuccessed = 1;
+                        File.Copy(para_localAuthFilePath, para_netAuthFilePath, true);
+                        setProtect.Attributes = FileAttributes.Hidden;
+                        return 1;
+                    }
+                }
+                catch (IOException e)
+                {
+                    isNetSuccessed = 0;
+                }
+            }
+            //-------------------写入远程授权文件结束-----------------//
+            //-------------------写入远程授权文件失败，将U盘文件恢复-------//
+            if (isNetSuccessed == 0)
+            {
+                try
+                {
+                    FileStream recoverU = new FileStream(uFilePath, FileMode.Open);
+                    using (var stream = new StreamWriter(recoverU))
+                    {
+                        stream.Write(currentUKeyMD5);
+                    }
+                    recoverU.Close();
+                }
+                catch (IOException e)
+                {
+                }
+            }
+            //-------------------重新写入U盘授权文件结束-----------------//
+            return 0;
+        }
+        /// <summary>
+        /// 计算给定字符串的MD5值
+        /// </summary>
+        /// <returns></returns>
+        private string calcMD5(string goingCalculatedKey)
+        {
+            MD5 thisMD5 = MD5.Create();
+            byte[] thisByte = thisMD5.ComputeHash(Encoding.UTF8.GetBytes(goingCalculatedKey));
+            StringBuilder sBuilder = new StringBuilder();
+            for (int i = 0; i < thisByte.Length; i++)
+            {
+                sBuilder.Append(thisByte[i].ToString("x2"));
+            }
+            string calced = sBuilder.ToString();
+            calced = calced.ToUpper();
+            return calced;
+        }
+        /// <summary>
+        /// 随机字符串生成器
+        /// </summary>
+        /// <param name="randomBits"></param>
+        /// <returns></returns>
+        private string randomValuesGenerator(int randomBits)
+        {
+            int number;
+            string randomValues = String.Empty;
+            System.Random random = new Random();
+            for (int i = 0; i < randomBits; i++)
+            {
+                number = random.Next();
+                number = number % 62;
+                if (number < 10)
+                {
+                    number += 48;
+                }
+                else if (number > 9 && number < 36)
+                {
+                    number += 55;
+                }
+                else
+                {
+                    number += 61;
+                }
+                randomValues += ((char)number).ToString();
+            }
+
+            return randomValues;
+        }
+        /// <summary>
+        /// 校验码计算器
+        /// </summary>
+        /// <param name="calcedString"></param>
+        /// <returns></returns>
+        private char calculateCheckCode(string calcedString)
+        {
+            char checkCode = '@';
+            int calcCheckSum = 0;
+            foreach (char c in calcedString)
+            {
+                calcCheckSum += (int)c;
+            }
+            checkCode = (char)((calcCheckSum % 26) + 65);
+            return checkCode;
+        }
         /// <summary>
         /// 按键监测主函数
         /// </summary>
@@ -335,490 +759,16 @@ namespace KeyboardIntercept
             if (nCode >= 0 && wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
             {
                 ///////////////////////////////////////////////////////////////////////////////////////////////
+                SendKeys.Send("");
+                return 1;
                 KeyboardHookStruct MyKeyboardHookStruct = (KeyboardHookStruct)Marshal.PtrToStructure(lParam, typeof(KeyboardHookStruct));
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
-                if (accessNetFileOrNot == 0 ){
-                    accessNetFileOrNot = 1;
-                    //System.Diagnostics.Process p = new System.Diagnostics.Process();
-                    System.Diagnostics.Process.Start("net.exe", para_netLoginPath);
-                    //p.StartInfo.FileName = "net.exe";
-                    //p.StartInfo.UseShellExecute = false;
-                    //p.StartInfo.RedirectStandardInput = true;//接受来自调用程序的输入信息
-                    //p.StartInfo.RedirectStandardOutput = false;//由调用程序获取输出信息
-                    //p.StartInfo.RedirectStandardError = true;//重定向标准错误输出
-                    //p.StartInfo.CreateNoWindow = true;//不显示程序窗口
-                    //p.Start();
-                    //p.StandardInput.WriteLine(para_netLoginPath + "&&exit");
-                    //p.StandardInput.AutoFlush = true;
-                    //System.Console.WriteLine(p.StandardOutput.ReadToEnd());
-                    if (File.Exists(para_netAuthFilePath))
-                    {
-                        currentNetwork = 1;
-                        File.Copy(para_netAuthFilePath, para_localAuthFilePath, true);
-                        File.Copy(para_netLogFilePath, para_localLogFilePath, true);
-                    }
-                    else {
-                        currentNetwork = 0;
-                        string hasUpan = this.isUpan();
-                        if (string.Equals("A:", hasUpan, StringComparison.CurrentCulture)){
-                            keyboardCurrentAllow = 0;
-                            SendKeys.Send("");
-                            return 1;
-                        }
-                        else{
-                            para_uFilePath = hasUpan;
-                            para_uFilePath += "\\PrioData.exe";
-                            if (File.Exists(para_uFilePath))
-                            {
-                                //Stop();//停止键盘控制，此后网络恢复后不再控制
-                                keyboardCurrentAllow = 1;
-                                return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);//授权文件恢复后，继续拦截键盘
-                            }
-                            else {
-                                keyboardCurrentAllow = 0;
-                                SendKeys.Send("");
-                                return 1;
-                            }
-                        }
-                    }
-                    //p.WaitForExit();//等待程序执行完退出进程
-                    //p.Close();
-                }
-                if ((judgedOrNot == 0 || compareSuccess == 0) && accessNetFileOrNot == 1)//未对比或对比失败就开始对比
-                {
-                    string wrongNetHasUpan = this.isUpan();
-                    wrongNetHasUpan += "\\PrioData.exe";
-                    if (currentNetwork == 0 && File.Exists(wrongNetHasUpan))
-                    {
-                        keyboardCurrentAllow = 1;
-                        return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
-                    }
-                    else { keyboardCurrentAllow = 0; }
-
-                    judgedOrNot = 1;//标记已对比过
-                    string hasUpan = this.isUpan();
-                    if (string.Equals("A:", hasUpan, StringComparison.CurrentCulture))
-                    {
-                        keyboardCurrentAllow = 0;
-                        SendKeys.Send("");
-                        return 1;
-                    }
-                    else {
-                        para_uFilePath = hasUpan;
-                    }
-                    para_uFilePath += "\\PrioData.exe";
-                    if (para_uFilePath == "A:\\PrioData.exe")
-                    {
-                        keyboardCurrentAllow = 0;
-                        SendKeys.Send("");
-                        return 1;
-                    }
-                    //以下判断本地U盘中是否有授权文件
-                    if (!File.Exists(para_uFilePath)) {
-                        keyboardCurrentAllow = 0;
-                        SendKeys.Send("");
-                        return 1;
-                    }
-                    string[] passwdArray = this.readAndOutputKeysIn(para_localAuthFilePath);
-                    string passwdKey = this.readKeyFromU(para_uFilePath);
-                    foreach (string item in passwdArray)
-                    {
-                        String md5result = this.calcMD5(item);
-                        System.Console.WriteLine(md5result);
-                        if (string.Equals(md5result, passwdKey, StringComparison.CurrentCulture))
-                        {
-                            currentUKeyShow = item;
-                            currentUKeyMD5 = passwdKey;
-                            cutOrNot = 1;
-                            compareSuccess = 1;//对比成功了
-                            keyboardCurrentAllow = 1;//停止拦截鼠标右键
-                            this.updateKeyToUAndAuthorized(para_localAuthFilePath, para_uFilePath);
-                            this.useLogGenerator();
-                            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
-                            File.Delete(para_localAuthFilePath);
-                            File.Delete(para_localLogFilePath);
-                        }
-                    }
-                    //以下的判断针对第一次对比授权的结果选择第一次的按键是否正常发送
-                    if (compareSuccess == 1 && cutOrNot == 1){
-                        return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
-                    }
-                    else {
-                        SendKeys.Send("");
-                        return 1;
-                    }
-                }
-                else
-                { //如果已对比过，则根据对比结果来判断是否要将以后的按键发送。
-
-                    if (currentNetwork == 0)
-                    {
-                        string wrongNetHasUpan = this.isUpan();
-                        wrongNetHasUpan += "\\PrioData.exe";
-                        if (File.Exists(wrongNetHasUpan))
-                        {
-                            keyboardCurrentAllow = 1;
-                            return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
-                        }
-                    }
-                    para_uFilePath = this.isUpan();
-                    para_uFilePath += "\\PrioData.exe";
-                    if (para_uFilePath == "A:\\PrioData.exe" || !File.Exists(para_uFilePath))
-                    {
-                        //U盘拨出，将标识重置
-                        cutOrNot = 0;
-                        judgedOrNot = 0;
-                        compareSuccess = 0;
-                        accessNetFileOrNot = 0;
-                        keyboardCurrentAllow = 0;
-                        currentNetwork = 1;
-                        para_uFilePath = "A:";
-                        currentUKeyCount = 0;
-                        currentUKeyShow = "";
-                        currentUKeyMD5 = "";
-                        SendKeys.Send("");
-                        return 1;
-                    }
-                    else{
-                        return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
-                    }
-                }
-                //keyboardCurrentAllow = 0;
+                //return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
             }
-            return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
+            SendKeys.Send("");
+            return 1;
+            //return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
         }
-        /// <summary>
-        /// 授权记录生成器
-        /// </summary>
-        /// <param name="ConstantInformations"></param>
-        /// <param name="calcCount"></param>
-        /// <returns></returns>
-        private string authorizedKeysGenerator(string ConstantInformations, int calcCount)
-        {
-            string authorizedKey = String.Empty;
-            authorizedKey = randomValuesGenerator(20);
-            authorizedKey += ConstantInformations;
-            authorizedKey += randomValuesGenerator(10);
-            string yearFoutBits = System.DateTime.Now.Date.Year.ToString();
-            authorizedKey += yearFoutBits.Substring(2,2);
-            authorizedKey += randomValuesGenerator(8);
-            int month_bit = System.DateTime.Now.Date.Month;
-            string month_2bit = month_bit.ToString() ;
-            if (month_bit < 10) { month_2bit = "0" + System.DateTime.Now.Date.Month.ToString(); }
-            authorizedKey += month_2bit;
-            authorizedKey += randomValuesGenerator(8);
-            int day_bit = System.DateTime.Now.Date.Day;
-            string day_2bit = day_bit.ToString();
-            if (day_bit < 10) { day_2bit = "0" + System.DateTime.Now.Date.Day.ToString(); }
-            authorizedKey += day_2bit;
-            authorizedKey += randomValuesGenerator(10);
-            //authorizedKey += "0x";
-            authorizedKey += calcCount.ToString("x2");
-            authorizedKey += randomValuesGenerator(14);
-            authorizedKey += this.calculateCheckCode(authorizedKey).ToString();
-            return authorizedKey;
-        }
-        /// <summary>
-        /// 随机字符串生成器
-        /// </summary>
-        /// <param name="randomBits"></param>
-        /// <returns></returns>
-        private string randomValuesGenerator(int randomBits){
-            int number;
-            string randomValues = String.Empty;
-            System.Random random = new Random();
-            for (int i = 0; i < randomBits; i++){
-                number = random.Next();
-                number = number % 62;
-                if (number < 10){
-                    number += 48;
-                }
-                else if (number > 9 && number < 36){
-                    number += 55;
-                }
-                else{
-                    number += 61;
-                }
-                randomValues += ((char)number).ToString();
-            }
-
-            return randomValues;
-        }
-        /// <summary>
-        /// 校验码计算器
-        /// </summary>
-        /// <param name="calcedString"></param>
-        /// <returns></returns>
-        private char calculateCheckCode(string calcedString){
-            char checkCode = '@';
-            int calcCheckSum = 0;
-            foreach(char c in calcedString){
-                calcCheckSum += (int)c;
-            }
-            checkCode = (char)((calcCheckSum % 26)+65);
-            return checkCode;
-        }   
-        /// <summary>
-        /// 以每次读取一行的形式读取授权码,返回字符数组
-        /// </summary>
-        /// <param name="filePath"></param>
-        /// <returns></returns>
-        private string[] readAndOutputKeysIn(string filePath)
-        {
-            ArrayList readedKeysList = new ArrayList();
-            try
-            {
-                FileInfo setProtect = new FileInfo(filePath);
-                setProtect.Attributes = FileAttributes.Normal;
-                FileStream keysInFile = new FileStream(filePath, FileMode.Open);
-                using (var stream = new StreamReader(keysInFile)) {
-                    while(!stream.EndOfStream){
-                        readedKeysList.Add(stream.ReadLine());
-                    }
-                }
-                keysInFile.Close();
-            }
-            catch (IOException e){
-            }
-            string[] readedKeys = (string[])readedKeysList.ToArray(typeof(string));
-            return readedKeys;
-        }
-        /// <summary>
-        /// 以每次读取一行的形式读取授权码,返回ArrayList
-        /// </summary>
-        /// <param name="filePath"></param>
-        /// <returns></returns>
-        private ArrayList readAndOutputKeysInArrayList(string filePath)
-        {
-            ArrayList readedKeysList = new ArrayList();
-            if (!File.Exists(filePath)){
-                return readedKeysList;
-            }
-            try
-            {
-                FileInfo setProtect = new FileInfo(filePath);
-                setProtect.Attributes = FileAttributes.Normal;
-                FileStream keysInFile = new FileStream(filePath, FileMode.Open);
-                using (var stream = new StreamReader(keysInFile))
-                {
-                    while (!stream.EndOfStream)
-                    {
-                        readedKeysList.Add(stream.ReadLine());
-                    }
-                }
-                keysInFile.Close();
-            }
-            catch (IOException e){
-            }
-            return readedKeysList;
-        }
-        /// <summary>
-        /// 读取授权U盘中的一行授权码
-        /// </summary>
-        /// <param name="filePath"></param>
-        /// <returns></returns>
-        private string readKeyFromU(string filePath)
-        {
-            String readedKeys = "";
-            if(!File.Exists(filePath)){
-                return readedKeys;
-            }
-            try
-            {
-                FileStream keysInFile = new FileStream(filePath, FileMode.Open);
-                using (var stream = new StreamReader(keysInFile))
-                {
-                    while (!stream.EndOfStream)
-                    {
-                        readedKeys = stream.ReadLine();
-                    }
-                }
-                keysInFile.Close();
-            }
-            catch (IOException e){
-            }
-            return readedKeys;
-        }
-        /// <summary>
-        /// 产生新的授权码存储在U盘中与授权码文件中
-        /// </summary>
-        /// <param name="netFilePath"></param>
-        /// <param name="uFilePath"></param>
-        /// <returns></returns>
-        private int updateKeyToUAndAuthorized(string netFilePath,string uFilePath) {
-            //-------------------写入U盘-----------------//
-            if (!File.Exists(netFilePath) || !File.Exists(uFilePath))
-            {
-                return 0;
-            }
-            int isUSuccessed = 0;//U盘是否写入成功，0失败，1成功
-            int isNetSuccessed = 0;//授权文件是否写入成功，0失败，1成功
-
-            //准备新生成授权码中的次数控制
-            string stringcount = currentUKeyShow.Substring(82, 2);
-            int keysUsedCount = Convert.ToInt32(stringcount, 16);            
-            if (keysUsedCount == 255)
-            {
-                keysUsedCount = 0;
-            }
-            else {
-                keysUsedCount += 1;
-            }
-            //准备新生成授权码中的固定信息
-            string stringConstantInformationFromU = currentUKeyShow.Substring(20,20);
-            //新生成一串授权码
-            string newKey = this.authorizedKeysGenerator(stringConstantInformationFromU, keysUsedCount);
-            try {
-                FileStream outputToU = new FileStream(uFilePath, FileMode.Open);
-                using (var stream = new StreamWriter(outputToU)){
-                    stream.Write(this.calcMD5(newKey));
-                }
-                outputToU.Close();
-                isUSuccessed = 1;
-            }catch(IOException e){
-                isUSuccessed = 0;
-            }
-            //-------------------写入U盘线束-----------------//
-            //-------------------写入远程授权文件-----------------//
-            if(isUSuccessed == 1){//U盘写入成功后写入授权文件
-                ArrayList readedKeysList = new ArrayList();
-                readedKeysList = this.readAndOutputKeysInArrayList(netFilePath);
-                readedKeysList.Add(newKey);
-                for (int i = 0; i < readedKeysList.Count; i++){
-                    if (string.Equals(readedKeysList[i].ToString(), currentUKeyShow, StringComparison.CurrentCulture))
-                    {
-                        readedKeysList.RemoveAt(i);
-                    }
-                }
-                try{
-                    if(File.Exists(netFilePath)){
-                        FileInfo setProtect = new FileInfo(para_localAuthFilePath);
-                        setProtect.Attributes = FileAttributes.Normal;
-                        FileStream outputToNet = new FileStream(netFilePath, FileMode.Open);
-                        using (var stream = new StreamWriter(outputToNet)){
-                            foreach (string item in readedKeysList){
-                                stream.Write(item);
-                                stream.Write("\n");
-                            }
-                        }
-                        outputToNet.Close();
-                        isNetSuccessed = 1;
-                        File.Copy(para_localAuthFilePath, para_netAuthFilePath, true);
-                        setProtect.Attributes = FileAttributes.Hidden ;
-                        return 1;
-                    }
-                }
-                catch (IOException e){
-                    isNetSuccessed = 0;
-                }
-            }
-            //-------------------写入远程授权文件结束-----------------//
-            //-------------------写入远程授权文件失败，将U盘文件恢复-------//
-            if (isNetSuccessed == 0) {
-                try{
-                    FileStream recoverU = new FileStream(uFilePath, FileMode.Open);
-                    using (var stream = new StreamWriter(recoverU))
-                    {
-                        stream.Write(currentUKeyMD5);
-                    }
-                    recoverU.Close();
-                }
-                catch (IOException e){
-                }
-            }
-            //-------------------重新写入U盘授权文件结束-----------------//
-            return 0;
-        }
-        /// <summary>
-        /// 判断是否有U盘,如果有，则选中第一个返回其盘符
-        /// </summary>
-        /// <returns></returns>
-        private string isUpan(){
-            string uPanList = "A:";
-
-            DriveInfo[] allDevice = DriveInfo.GetDrives();
-            foreach (DriveInfo drive in allDevice){
-                if (drive.DriveType == DriveType.Removable)
-                {
-                    uPanList = drive.Name.ToString();
-                }
-            }
-            return uPanList;
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        private string calcMD5(string goingCalculatedKey) {
-            MD5 thisMD5 = MD5.Create();
-            byte[] thisByte = thisMD5.ComputeHash(Encoding.UTF8.GetBytes(goingCalculatedKey));
-            StringBuilder sBuilder = new StringBuilder();
-            for (int i = 0; i < thisByte.Length; i++) {
-                sBuilder.Append(thisByte[i].ToString("x2"));
-            }
-            string calced = sBuilder.ToString();
-            calced = calced.ToUpper();
-            return calced;
-        }
-        private void useLogGenerator() {
-            string thisLog = "用户：";
-            thisLog += currentUKeyShow.Substring(20, 20) + " ";
-            thisLog += "开始使用时间：";
-            thisLog = thisLog + System.DateTime.Now.Date.Year.ToString() + "." + 
-                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
-            thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." + 
-                System.DateTime.Now.Second.ToString();
-            string stringcount = currentUKeyShow.Substring(82, 2);
-            int keysUsedCount = Convert.ToInt32(stringcount, 16);
-            keysUsedCount += 1;
-            thisLog += " 该用户第 ";
-            thisLog += keysUsedCount.ToString() + " 次使用本授权";
-            try
-            {
-                if (File.Exists(para_localLogFilePath)){
-                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.Append);
-                    using (var stream = new StreamWriter(writeLog))
-                    {
-                        stream.Write(thisLog);
-                        stream.Write("\n");
-                    }
-                    writeLog.Close();
-                }
-                else {
-                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.OpenOrCreate);
-                    using (var stream = new StreamWriter(writeLog))
-                    {
-                        stream.Write(thisLog);
-                        stream.Write("\n");
-                    }
-                    writeLog.Close();
-                }
-            }
-            catch (IOException e){
-            }
-        }
-        //从文件中将授权码读取到程序中，读取形式为每次100个字符
-        /*
-        private string[] readAndOutputKeysIn(string filePath){
-            ArrayList readedKeysList = new ArrayList();
-            string keyInOneLine = "";
-            byte[] byData = new byte[100];
-            char[] charData = new char[100];
-
-            try {
-                FileStream keysInFile = new FileStream(filePath,FileMode.Open);
-                keysInFile.Seek(0, SeekOrigin.Begin);
-                keysInFile.Read(byData, 0, 99);
-                Decoder d = Encoding.Default.GetDecoder();
-                d.GetChars(byData, 0, byData.Length, charData, 0);
-                keyInOneLine = charData.ToString();
-                keysInFile.Close();
-            }catch(IOException e){
-                //System.Console.WriteLine(e.ToString());
-            }
-            readedKeysList.Add(keyInOneLine);
-            string[] readedKeys = (string[])readedKeysList.ToArray(typeof(string));
-            return readedKeys;
-        }*/
+            
     }
 }
