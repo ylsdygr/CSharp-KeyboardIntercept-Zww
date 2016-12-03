@@ -306,9 +306,9 @@ namespace KeyboardIntercept
         //string para_localAuthFilePath = "C:\\PrioList.exe";//网络上的授权文件地址,映射盘符的
         string para_localAuthFilePath = "C:\\Windows\\PrioList.exe";//网络上的授权文件复制到本地的地址
         string para_localLogFilePath = "C:\\Windows\\KeyboardUseLog.exe";//授权使用日志文件路径
-        string para_netLoginPath = " use \\\\192.168.6.86\\Shared  /user:\"User\" \"Passwd\"";
-        string para_netAuthFilePath = @"\\192.168.6.86\Shared\PrioList.exe";//网络上的授权文件地址
-        string para_netLogFilePath = @"\\192.168.6.86\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
+        string para_netLoginPath = " use \\\\192.168.1.173\\Shared  /user:\"XXXXX\" \"XXXXX\"";
+        string para_netAuthFilePath = @"\\192.168.1.173\Shared\PrioList.exe";//网络上的授权文件地址
+        string para_netLogFilePath = @"\\192.168.1.173\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
         int accessNetFileOrNot = 0;//标记此次U盘接入是否与远程授权文件服务器进行过连接，0为未连接过，1为连接过。
         /////////////////////////////////////////////////////
         string para_uFilePath = "A:";//本地U盘授权文件地址，默认字符串仅判断是否被修改使用
@@ -424,6 +424,7 @@ namespace KeyboardIntercept
                     foreach (string item in passwdArray)
                     {
                         String md5result = this.calcMD5(item);
+                        System.Console.WriteLine(md5result);
                         if (string.Equals(md5result, passwdKey, StringComparison.CurrentCulture))
                         {
                             currentUKeyShow = item;
@@ -456,6 +457,7 @@ namespace KeyboardIntercept
                         wrongNetHasUpan += "\\PrioData.exe";
                         if (File.Exists(wrongNetHasUpan))
                         {
+                            keyboardCurrentAllow = 1;
                             return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
                         }
                     }
@@ -463,12 +465,13 @@ namespace KeyboardIntercept
                     para_uFilePath += "\\PrioData.exe";
                     if (para_uFilePath == "A:\\PrioData.exe" || !File.Exists(para_uFilePath))
                     {
-                        //U盘拨出，将三个标识重置
+                        //U盘拨出，将标识重置
                         cutOrNot = 0;
                         judgedOrNot = 0;
                         compareSuccess = 0;
                         accessNetFileOrNot = 0;
                         keyboardCurrentAllow = 0;
+                        currentNetwork = 1;
                         para_uFilePath = "A:";
                         currentUKeyCount = 0;
                         currentUKeyShow = "";
