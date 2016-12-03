@@ -4,6 +4,8 @@ using System.IO;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Text;
+using System.Collections;
 
 
 namespace KeyboardIntercept
@@ -268,9 +270,10 @@ namespace KeyboardIntercept
         private const int WM_SYSKEYUP = 0x105;
         
         int count = 0;
+        //以下两个定义的标记在U盘拨出时会清除。
         int cutOrNot = 0;
-        char[] passwd = new char[] { 'j','a','c','k','c','h','e','n'};
-		
+        int judgedOrNot = 0;//是否对U盘中的授权文件进行对比，0未对比，1对比过
+        string[] comparedKeys = { };
         private int KeyboardHookProc(int nCode, Int32 wParam, IntPtr lParam)
         {
             //if (nCode >= 0 && wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
@@ -278,31 +281,138 @@ namespace KeyboardIntercept
             {
                 KeyboardHookStruct MyKeyboardHookStruct = (KeyboardHookStruct)Marshal.PtrToStructure(lParam, typeof(KeyboardHookStruct));
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
-                
-                string compareString = passwd[count].ToString();
-                if (string.Equals(keyData.ToString(), compareString, StringComparison.CurrentCultureIgnoreCase))
+                if (judgedOrNot == 0)//未对比的话就对比一次
                 {
-                    if (count == passwd.Length - 1)
+                    string[] passwdArray = this.readAndOutputKeysIn("C:\\Users\\Two\\Desktop\\authorizedKeys");
+                    string passwdKey = this.readKeyFromU("C:\\Users\\Two\\Desktop\\authorizedKey");
+                    foreach (string item in passwdArray)
                     {
-                        count = 0;
-                        cutOrNot = 1;
-                        Stop();
+                        if (string.Equals(item, passwdKey, StringComparison.CurrentCulture))
+                        {
+                            cutOrNot = 1;
+                            Stop();
+                        }
+                    }
+                    judgedOrNot = 1;//标记已对比过
+                    //以下的判断针对第一次对比授权的结果选择第一次的按键是否正常发送
+                    if (cutOrNot == 0){
                         SendKeys.Send("");
                         return 1;
                     }
-                    else{
-                        count += 1;
+                    else {
+                        return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
                     }
                 }
+                    //如果已对比过，则根据对比结果来判断是否要将以后的按键发送。
                 else {
-                    count = 0;
-                }
-                if (cutOrNot == 0) {
-                    SendKeys.Send("");
-                    return 1;
+                    if (cutOrNot == 0)
+                    {
+                        SendKeys.Send("");
+                        return 1;
+                    }
+                    else {
+                        return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
+                    }
                 }
             }
-            return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
+            SendKeys.Send("");
+            return 0;
+        }
+        
+        //授权记录生成器
+        private string authorizedKeysGenerator(){
+            System.DateTime currentDate = new DateTime();
+            int count = 38;
+            string authorizedKey = String.Empty;
+            authorizedKey = randomValuesGenerator(20);
+            authorizedKey += "ConstantInformations";
+            authorizedKey += randomValuesGenerator(8);
+            authorizedKey += System.DateTime.Now.Date.Year.ToString();
+            authorizedKey += randomValuesGenerator(8);
+            authorizedKey += System.DateTime.Now.Date.Month.ToString();
+            authorizedKey += randomValuesGenerator(8);
+            authorizedKey += System.DateTime.Now.Date.Day.ToString();
+            authorizedKey += randomValuesGenerator(8);
+            authorizedKey += "0x";
+            authorizedKey += count.ToString("x2");
+            authorizedKey += randomValuesGenerator(14);
+            authorizedKey += this.calculateCheckCode(authorizedKey).ToString();
+            System.Console.WriteLine(authorizedKey);
+            
+            return authorizedKey;
+        }
+        //随机字符串生成器
+        private string randomValuesGenerator(int randomBits){
+            int number;
+            string randomValues = String.Empty;
+            System.Random random = new Random();
+            for (int i = 0; i < randomBits; i++){
+                number = random.Next();
+                number = number % 62;
+                if (number < 10){
+                    number += 48;
+                }
+                else if (number > 9 && number < 36){
+                    number += 55;
+                }
+                else{
+                    number += 61;
+                }
+                randomValues += ((char)number).ToString();
+            }
+
+            return randomValues;
+        }
+        //校验码计算器
+        private char calculateCheckCode(string calcedString){
+            char checkCode = '@';
+            int calcCheckSum = 0;
+            foreach(char c in calcedString){
+                calcCheckSum += (int)c;
+            }
+            checkCode = (char)((calcCheckSum % 26)+65);
+            return checkCode;
+        }   
+        //以每次读取一行的形式读取授权码
+        private string[] readAndOutputKeysIn(string filePath)
+        {
+            ArrayList readedKeysList = new ArrayList();
+            try
+            {
+                FileStream keysInFile = new FileStream(filePath, FileMode.Open);
+                using (var stream = new StreamReader(keysInFile)) {
+                    while(!stream.EndOfStream){
+                        readedKeysList.Add(stream.ReadLine());
+                    }
+                }
+                keysInFile.Close();
+            }
+            catch (IOException e){
+                //System.Console.WriteLine(e.ToString());
+            }
+            string[] readedKeys = (string[])readedKeysList.ToArray(typeof(string));
+            return readedKeys;
+        }
+        //读取授权U盘中的一行授权码
+        private string readKeyFromU(string filePath)
+        {
+            String readedKeys = "";
+            try
+            {
+                FileStream keysInFile = new FileStream(filePath, FileMode.Open);
+                using (var stream = new StreamReader(keysInFile))
+                {
+                    while (!stream.EndOfStream)
+                    {
+                        readedKeys = stream.ReadLine();
+                    }
+                }
+                keysInFile.Close();
+            }
+            catch (IOException e){
+                //System.Console.WriteLine(e.ToString());
+            }
+            return readedKeys;
         }
     }
 }
