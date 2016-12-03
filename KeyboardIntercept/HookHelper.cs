@@ -296,9 +296,15 @@ namespace KeyboardIntercept
         int judgedOrNot = 0;//是否对U盘中的授权文件进行对比，0未对比，1对比过
         int compareSuccess = 0;//标记是否对比成功，0未成功，1成功过
         string paraConstantInformations = "ConstantInformations";//固定的单串信息，字符必须是20个
-        //string para_netFilePath = "C:\\PrioList.list";//网络上的授权文件地址,映射盘符的
-        string para_netFilePath = @"\\10.16.139.89\everyone\PrioList.list";//网络上的授权文件地址
-        string para_logFilePath = "C:\\KeyboardUse.chLog";//U盘使用日志文件路径
+        ////////////////////////////////////////////////////
+        //string para_localAuthFilePath = "C:\\PrioList.exe";//网络上的授权文件地址,映射盘符的
+        string para_localAuthFilePath = "C:\\Windows\\PrioList.exe";//网络上的授权文件复制到本地的地址
+        string para_localLogFilePath = "C:\\Windows\\KeyboardUseLog.exe";//授权使用日志文件路径
+        string para_netLoginPath = " use \\\\192.168.191.3\\Shared  /user:\"User\" \"Passwd\"";
+        string para_netAuthFilePath = @"\\192.168.191.3\Shared\PrioList.exe";//网络上的授权文件地址
+        string para_netLogFilePath = @"\\192.168.191.3\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
+        int accessNetFileOrNot = 0;//标记此次U盘接入是否与远程授权文件服务器进行过连接，0为未连接过，1为连接过。
+        /////////////////////////////////////////////////////
         string para_uFilePath = "A:";//本地U盘授权文件地址，默认字符串仅判断是否被修改使用
         int currentUKeyCount = 0;//当前U盘中存储的访问次数
         string currentUKeyShow = "";//当前U盘存储的授权码明文
@@ -321,54 +327,37 @@ namespace KeyboardIntercept
             //if (nCode >= 0 && wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
             if (nCode >= 0 && wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
             {
-
-                ///////////////////////////////////////////////////////////////////////////////////////
-                
-                ///////////////////////////////////////////////////////////////////////////////////////////////
-                string strUserName = "30.6";
-                string strUserPD = "zww";
-                string filenames =" use \\\\" + "192.168.6.84\\everyone" +
-                    "  /user:\"" + strUserName + "\" \"" + strUserPD + "\"";
-                
-                System.Diagnostics.Process p = new System.Diagnostics.Process();
-                p.StartInfo.FileName = "net.exe";
-                p.StartInfo.UseShellExecute = false;
-                p.StartInfo.RedirectStandardInput = true;//接受来自调用程序的输入信息
-                p.StartInfo.RedirectStandardOutput = true;//由调用程序获取输出信息
-                p.StartInfo.RedirectStandardError = true;//重定向标准错误输出
-                p.StartInfo.CreateNoWindow = true;//不显示程序窗口
-                
-                p.Start();
-                System.Console.WriteLine("net.exe" + filenames);
-
-                p.StandardInput.WriteLine(filenames + "&&exit");
-                p.StandardInput.AutoFlush = true;
-                //string output = p.StandardOutput.ReadToEnd();
-                //System.Console.WriteLine(output);
-                
-                //StreamReader mStm = new StreamReader(@"\\10.16.139.89\everyone\PrioList.list");
-                //, System.Text.Encoding.Default
-
-                
-                if (File.Exists(@"\\192.168.6.84\everyone\PrioList.list"))
-                {
-                    System.Console.WriteLine("可访问");
-                    this.readAndOutputKeysInArrayList(@"\\192.168.6.84\everyone\PrioList.list");
-                }
-                p.WaitForExit();//等待程序执行完退出进程
-                p.Close();
-                return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
-
                 ///////////////////////////////////////////////////////////////////////////////////////////////
                 KeyboardHookStruct MyKeyboardHookStruct = (KeyboardHookStruct)Marshal.PtrToStructure(lParam, typeof(KeyboardHookStruct));
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
-                //以下判断远程授权文件不存在时操作
-                if(!File.Exists(para_netFilePath)){
-                    //Stop();//停止键盘控制，此后网络恢复后不再控制
-                    keyboardCurrentAllow = 1;
-                    return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);//远程授权文件恢复后，继续拦截键盘
+                if (accessNetFileOrNot == 0 ){
+                    accessNetFileOrNot = 1;
+                    //System.Diagnostics.Process p = new System.Diagnostics.Process();
+                    System.Diagnostics.Process.Start("net.exe", para_netLoginPath);
+                    //p.StartInfo.FileName = "net.exe";
+                    //p.StartInfo.UseShellExecute = false;
+                    //p.StartInfo.RedirectStandardInput = true;//接受来自调用程序的输入信息
+                    //p.StartInfo.RedirectStandardOutput = false;//由调用程序获取输出信息
+                    //p.StartInfo.RedirectStandardError = true;//重定向标准错误输出
+                    //p.StartInfo.CreateNoWindow = true;//不显示程序窗口
+                    //p.Start();
+                    //p.StandardInput.WriteLine(para_netLoginPath + "&&exit");
+                    //p.StandardInput.AutoFlush = true;
+                    //System.Console.WriteLine(p.StandardOutput.ReadToEnd());
+                    if (File.Exists(para_netAuthFilePath))
+                    {
+                        File.Copy(para_netAuthFilePath, para_localAuthFilePath, true);
+                        File.Copy(para_netLogFilePath, para_localLogFilePath, true);
+                    }
+                    else {
+                        //Stop();//停止键盘控制，此后网络恢复后不再控制
+                        keyboardCurrentAllow = 1;
+                        return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);//授权文件恢复后，继续拦截键盘
+                    }
+                    //p.WaitForExit();//等待程序执行完退出进程
+                    //p.Close();
                 }
-                if (judgedOrNot == 0 || compareSuccess == 0)//未对比或对比失败就开始对比
+                if ((judgedOrNot == 0 || compareSuccess == 0) && accessNetFileOrNot == 1)//未对比或对比失败就开始对比
                 {
                     judgedOrNot = 1;//标记已对比过
                     string hasUpan = this.isUpan();
@@ -388,13 +377,13 @@ namespace KeyboardIntercept
                         SendKeys.Send("");
                         return 1;
                     }
-                    //以下判断本地U盘中是否有授权文件  及 远程授权列表是否可访问
-                    if (!File.Exists(para_uFilePath) || !File.Exists(para_netFilePath)) {
+                    //以下判断本地U盘中是否有授权文件
+                    if (!File.Exists(para_uFilePath)) {
                         keyboardCurrentAllow = 0;
                         SendKeys.Send("");
                         return 1;
                     }
-                    string[] passwdArray = this.readAndOutputKeysIn(para_netFilePath);
+                    string[] passwdArray = this.readAndOutputKeysIn(para_localAuthFilePath);
                     string passwdKey = this.readKeyFromU(para_uFilePath);
                     foreach (string item in passwdArray)
                     {
@@ -406,8 +395,12 @@ namespace KeyboardIntercept
                             cutOrNot = 1;
                             compareSuccess = 1;//对比成功了
                             keyboardCurrentAllow = 1;//停止拦截鼠标右键
-                            this.updateKeyToUAndAuthorized(para_netFilePath, para_uFilePath);
+                            this.updateKeyToUAndAuthorized(para_localAuthFilePath, para_uFilePath);
                             this.useLogGenerator();
+                            File.Copy(para_localAuthFilePath, para_netAuthFilePath, true);
+                            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
+                            File.Delete(para_localAuthFilePath);
+                            File.Delete(para_localLogFilePath);
                         }
                     }
                     //以下的判断针对第一次对比授权的结果选择第一次的按键是否正常发送
@@ -429,6 +422,7 @@ namespace KeyboardIntercept
                         cutOrNot = 0;
                         judgedOrNot = 0;
                         compareSuccess = 0;
+                        accessNetFileOrNot = 0;
                         keyboardCurrentAllow = 0;
                         para_uFilePath = "A:";
                         currentUKeyCount = 0;
@@ -441,7 +435,7 @@ namespace KeyboardIntercept
                         return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
                     }
                 }
-                keyboardCurrentAllow = 0;
+                //keyboardCurrentAllow = 0;
             }
             return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
         }
@@ -460,14 +454,20 @@ namespace KeyboardIntercept
             string yearFoutBits = System.DateTime.Now.Date.Year.ToString();
             authorizedKey += yearFoutBits.Substring(2,2);
             authorizedKey += randomValuesGenerator(8);
-            authorizedKey += System.DateTime.Now.Date.Month.ToString();
+            int month_bit = System.DateTime.Now.Date.Month;
+            string month_2bit = month_bit.ToString() ;
+            if (month_bit < 10) { month_2bit = "0" + System.DateTime.Now.Date.Month.ToString(); }
+            authorizedKey += month_2bit;
             authorizedKey += randomValuesGenerator(8);
-            authorizedKey += System.DateTime.Now.Date.Day.ToString();
-            authorizedKey += randomValuesGenerator(8);
-            authorizedKey += "0x";
+            int day_bit = System.DateTime.Now.Date.Day;
+            string day_2bit = day_bit.ToString();
+            if (day_bit < 10) { day_2bit = "0" + System.DateTime.Now.Date.Day.ToString(); }
+            authorizedKey += day_2bit;
+            authorizedKey += randomValuesGenerator(10);
+            //authorizedKey += "0x";
             authorizedKey += calcCount.ToString("x2");
             authorizedKey += randomValuesGenerator(14);
-            authorizedKey += this.calculateCheckCode(authorizedKey).ToString();           
+            authorizedKey += this.calculateCheckCode(authorizedKey).ToString();
             return authorizedKey;
         }
         /// <summary>
@@ -562,9 +562,6 @@ namespace KeyboardIntercept
             }
             catch (IOException e){
             }
-            foreach(string item in readedKeysList){
-                System.Console.WriteLine(item);
-            }
             return readedKeysList;
         }
         /// <summary>
@@ -647,7 +644,7 @@ namespace KeyboardIntercept
                 }
                 try{
                     if(File.Exists(netFilePath)){
-                        FileInfo setProtect = new FileInfo(para_netFilePath);
+                        FileInfo setProtect = new FileInfo(para_localAuthFilePath);
                         setProtect.Attributes = FileAttributes.Normal;
                         FileStream outputToNet = new FileStream(netFilePath, FileMode.Open);
                         using (var stream = new StreamWriter(outputToNet))
@@ -662,7 +659,7 @@ namespace KeyboardIntercept
                         isNetSuccessed = 1;
 
                         
-                        setProtect.Attributes = FileAttributes.Hidden | FileAttributes.ReadOnly ;
+                        setProtect.Attributes = FileAttributes.Hidden ;
                         return 1;
                     }
                 }
@@ -727,10 +724,15 @@ namespace KeyboardIntercept
                 System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
             thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." + 
                 System.DateTime.Now.Second.ToString();
+            string stringcount = currentUKeyShow.Substring(82, 2);
+            int keysUsedCount = Convert.ToInt32(stringcount, 16);
+            keysUsedCount += 1;
+            thisLog += " 该用户第 ";
+            thisLog += keysUsedCount.ToString() + " 次使用本授权";
             try
             {
-                if (File.Exists(para_logFilePath)){
-                    FileStream writeLog = new FileStream(para_logFilePath, FileMode.Append);
+                if (File.Exists(para_localLogFilePath)){
+                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.Append);
                     using (var stream = new StreamWriter(writeLog))
                     {
                         stream.Write(thisLog);
@@ -739,7 +741,7 @@ namespace KeyboardIntercept
                     writeLog.Close();
                 }
                 else {
-                    FileStream writeLog = new FileStream(para_logFilePath, FileMode.OpenOrCreate);
+                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.OpenOrCreate);
                     using (var stream = new StreamWriter(writeLog))
                     {
                         stream.Write(thisLog);
