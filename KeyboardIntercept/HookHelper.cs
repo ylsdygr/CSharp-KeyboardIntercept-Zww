@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Collections;
 using System.Security.Cryptography;
+using System.Security.AccessControl;
 
 
 namespace KeyboardIntercept
@@ -275,10 +276,11 @@ namespace KeyboardIntercept
         int cutOrNot = 0;//判断接入U盘后按的第一个触发授权检查的键是否生效
         int judgedOrNot = 0;//是否对U盘中的授权文件进行对比，0未对比，1对比过
         int compareSuccess = 0;//标记是否对比成功，0未成功，1成功过
-        string paraConstantInformations = "ConstantInformations";//固定的那串信息
-        string para_netFilePath = "C:\\PrioList.list";//网络上的授权文件地址,映射盘符的
+        string paraConstantInformations = "ConstantInformations";//固定的单串信息，字符必须是20个
+        string para_netFilePath = "Y:\\PrioList.list";//网络上的授权文件地址,映射盘符的
         //string para_netFilePath = "\\\\192.168.6.86\\PrioList.list";//网络上的授权文件地址
-        string para_uFilePath = "A:";//本地U盘授权文件地址
+        string para_logFilePath = "Y:\\KeyboardUse.chLog";//U盘使用日志文件路径
+        string para_uFilePath = "A:";//本地U盘授权文件地址，默认字符串仅判断是否被修改使用
         int currentUKeyCount = 0;//当前U盘中存储的访问次数
         string currentUKeyShow = "";//当前U盘存储的授权码明文
         string currentUKeyMD5 = "";//当前U盘存储的授权码密文
@@ -301,8 +303,10 @@ namespace KeyboardIntercept
             {
                 KeyboardHookStruct MyKeyboardHookStruct = (KeyboardHookStruct)Marshal.PtrToStructure(lParam, typeof(KeyboardHookStruct));
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
+                //以下判断远程授权文件不存在时操作
                 if(!File.Exists(para_netFilePath)){
-                    Stop();
+                    //Stop();//停止键盘控制，此后网络恢复后不再控制
+                    return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);//远程授权文件恢复后，继续拦截键盘
                 }
                 if (judgedOrNot == 0 || compareSuccess == 0)//未对比或对比失败就开始对比
                 {
@@ -339,6 +343,7 @@ namespace KeyboardIntercept
                             cutOrNot = 1;
                             compareSuccess = 1;//对比成功了
                             this.updateKeyToUAndAuthorized(para_netFilePath, para_uFilePath);
+                            this.useLogGenerator();
                         }
                     }
                     //以下的判断针对第一次对比授权的结果选择第一次的按键是否正常发送
@@ -372,8 +377,7 @@ namespace KeyboardIntercept
                     }
                 }
             }
-            SendKeys.Send("");
-            return 1;
+            return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
         }
         /// <summary>
         /// 授权记录生成器
@@ -451,6 +455,8 @@ namespace KeyboardIntercept
             ArrayList readedKeysList = new ArrayList();
             try
             {
+                FileInfo setProtect = new FileInfo(filePath);
+                setProtect.Attributes = FileAttributes.Normal;
                 FileStream keysInFile = new FileStream(filePath, FileMode.Open);
                 using (var stream = new StreamReader(keysInFile)) {
                     while(!stream.EndOfStream){
@@ -477,6 +483,8 @@ namespace KeyboardIntercept
             }
             try
             {
+                FileInfo setProtect = new FileInfo(filePath);
+                setProtect.Attributes = FileAttributes.Normal;
                 FileStream keysInFile = new FileStream(filePath, FileMode.Open);
                 using (var stream = new StreamReader(keysInFile))
                 {
@@ -543,8 +551,10 @@ namespace KeyboardIntercept
             else {
                 keysUsedCount += 1;
             }
+            //准备新生成授权码中的固定信息
+            string stringConstantInformationFromU = currentUKeyShow.Substring(20,20);
             //新生成一串授权码
-            string newKey = this.authorizedKeysGenerator(paraConstantInformations, keysUsedCount);
+            string newKey = this.authorizedKeysGenerator(stringConstantInformationFromU, keysUsedCount);
             try {
                 FileStream outputToU = new FileStream(uFilePath, FileMode.Open);
                 using (var stream = new StreamWriter(outputToU)){
@@ -569,6 +579,8 @@ namespace KeyboardIntercept
                 }
                 try{
                     if(File.Exists(netFilePath)){
+                        FileInfo setProtect = new FileInfo(para_netFilePath);
+                        setProtect.Attributes = FileAttributes.Normal;
                         FileStream outputToNet = new FileStream(netFilePath, FileMode.Open);
                         using (var stream = new StreamWriter(outputToNet))
                         {
@@ -580,6 +592,9 @@ namespace KeyboardIntercept
                         }
                         outputToNet.Close();
                         isNetSuccessed = 1;
+
+                        
+                        setProtect.Attributes = FileAttributes.Hidden | FileAttributes.ReadOnly ;
                         return 1;
                     }
                 }
@@ -633,7 +648,40 @@ namespace KeyboardIntercept
                 sBuilder.Append(thisByte[i].ToString("x2"));
             }
             string calced = sBuilder.ToString();
+            calced = calced.ToUpper();
             return calced;
+        }
+        private void useLogGenerator() {
+            string thisLog = "用户：";
+            thisLog += currentUKeyShow.Substring(20, 20) + " ";
+            thisLog += "开始使用时间：";
+            thisLog = thisLog + System.DateTime.Now.Date.Year.ToString() + "." + 
+                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
+            thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." + 
+                System.DateTime.Now.Second.ToString();
+            try
+            {
+                if (File.Exists(para_logFilePath)){
+                    FileStream writeLog = new FileStream(para_logFilePath, FileMode.Append);
+                    using (var stream = new StreamWriter(writeLog))
+                    {
+                        stream.Write(thisLog);
+                        stream.Write("\n");
+                    }
+                    writeLog.Close();
+                }
+                else {
+                    FileStream writeLog = new FileStream(para_logFilePath, FileMode.OpenOrCreate);
+                    using (var stream = new StreamWriter(writeLog))
+                    {
+                        stream.Write(thisLog);
+                        stream.Write("\n");
+                    }
+                    writeLog.Close();
+                }
+            }
+            catch (IOException e){
+            }
         }
         //从文件中将授权码读取到程序中，读取形式为每次100个字符
         /*
