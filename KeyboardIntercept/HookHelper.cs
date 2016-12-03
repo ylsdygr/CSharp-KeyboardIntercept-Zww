@@ -297,12 +297,12 @@ namespace KeyboardIntercept
         int compareSuccess = 0;//标记是否对比成功，0未成功，1成功过
         string paraConstantInformations = "ConstantInformations";//固定的单串信息，字符必须是20个
         ////////////////////////////////////////////////////
-        //string para_localAuthFilePath = "C:\\PrioList.exe";//网络上的授权文件地址,映射盘符的
-        string para_localAuthFilePath = "C:\\Windows\\PrioList.exe";//网络上的授权文件复制到本地的地址
-        string para_localLogFilePath = "C:\\Windows\\KeyboardUseLog.exe";//授权使用日志文件路径
-        string para_netLoginPath = " use \\\\192.168.191.3\\Shared  /user:\"User\" \"Passwd\"";
-        string para_netAuthFilePath = @"\\192.168.191.3\Shared\PrioList.exe";//网络上的授权文件地址
-        string para_netLogFilePath = @"\\192.168.191.3\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
+        //string para_localAuthFilePath = "C:\\PrioList.list";//网络上的授权文件地址,映射盘符的
+        string para_localAuthFilePath = "C:\\PrioList.list";//网络上的授权文件复制到本地的地址
+        string para_localLogFilePath = "C:\\KeyboardUse.chLog";//授权使用日志文件路径
+        string para_netLoginPath = " use \\\\192.168.191.3  /user:\"User\" \"Passwd\" ";
+        string para_netAuthFilePath = @"\\192.168.191.3\Shared\PrioList.list";//网络上的授权文件地址
+        string para_netLogFilePath = @"\\192.168.191.3\Shared\KeyboardUse.chLog";//授权使用日志文件路径
         int accessNetFileOrNot = 0;//标记此次U盘接入是否与远程授权文件服务器进行过连接，0为未连接过，1为连接过。
         /////////////////////////////////////////////////////
         string para_uFilePath = "A:";//本地U盘授权文件地址，默认字符串仅判断是否被修改使用
@@ -332,17 +332,18 @@ namespace KeyboardIntercept
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
                 if (accessNetFileOrNot == 0 ){
                     accessNetFileOrNot = 1;
-                    //System.Diagnostics.Process p = new System.Diagnostics.Process();
-                    System.Diagnostics.Process.Start("net.exe", para_netLoginPath);
-                    //p.StartInfo.FileName = "net.exe";
-                    //p.StartInfo.UseShellExecute = false;
-                    //p.StartInfo.RedirectStandardInput = true;//接受来自调用程序的输入信息
-                    //p.StartInfo.RedirectStandardOutput = false;//由调用程序获取输出信息
-                    //p.StartInfo.RedirectStandardError = true;//重定向标准错误输出
-                    //p.StartInfo.CreateNoWindow = true;//不显示程序窗口
-                    //p.Start();
-                    //p.StandardInput.WriteLine(para_netLoginPath + "&&exit");
-                    //p.StandardInput.AutoFlush = true;
+                    System.Diagnostics.Process pa = new System.Diagnostics.Process();
+                    //System.Diagnostics.Process.Start("net.exe", para_netLoginPath);
+                    pa.StartInfo.FileName = "net.exe";
+                    pa.StartInfo.UseShellExecute = false;
+                    pa.StartInfo.RedirectStandardInput = true;//接受来自调用程序的输入信息
+                    pa.StartInfo.RedirectStandardOutput = false;//由调用程序获取输出信息
+                    pa.StartInfo.RedirectStandardError = true;//重定向标准错误输出
+                    pa.StartInfo.CreateNoWindow = true;//不显示程序窗口
+                    pa.Start();
+                    pa.StandardInput.WriteLine(para_netLoginPath + "&&exit");
+                    pa.StandardInput.AutoFlush = true;
+                    System.Console.WriteLine(para_netLoginPath);
                     //System.Console.WriteLine(p.StandardOutput.ReadToEnd());
                     if (File.Exists(para_netAuthFilePath))
                     {
@@ -354,10 +355,10 @@ namespace KeyboardIntercept
                         keyboardCurrentAllow = 1;
                         return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);//授权文件恢复后，继续拦截键盘
                     }
-                    //p.WaitForExit();//等待程序执行完退出进程
-                    //p.Close();
+                    pa.WaitForExit();//等待程序执行完退出进程
+                    pa.Close();
                 }
-                if ((judgedOrNot == 0 || compareSuccess == 0) && accessNetFileOrNot == 1)//未对比或对比失败就开始对比
+                if (judgedOrNot == 0 || compareSuccess == 0)//未对比或对比失败就开始对比
                 {
                     judgedOrNot = 1;//标记已对比过
                     string hasUpan = this.isUpan();
@@ -699,6 +700,7 @@ namespace KeyboardIntercept
                     uPanList = drive.Name.ToString();
                 }
             }
+            uPanList = "E:";
             return uPanList;
         }
         /// <summary>
