@@ -306,7 +306,7 @@ namespace KeyboardIntercept
         //string para_localAuthFilePath = "C:\\PrioList.exe";//网络上的授权文件地址,映射盘符的
         string para_localAuthFilePath = "C:\\Windows\\PrioList.exe";//网络上的授权文件复制到本地的地址
         string para_localLogFilePath = "C:\\Windows\\KeyboardUseLog.exe";//授权使用日志文件路径
-        string para_netLoginPath = " use \\\\192.168.1.173\\Shared  /user:\"XXXXX\" \"XXXXX\"";
+        string para_netLoginPath = " use \\\\192.168.1.173\\Shared  /user:\"User\" \"Passwd\"";
         string para_netAuthFilePath = @"\\192.168.1.173\Shared\PrioList.exe";//网络上的授权文件地址
         string para_netLogFilePath = @"\\192.168.1.173\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
         int accessNetFileOrNot = 0;//标记此次U盘接入是否与远程授权文件服务器进行过连接，0为未连接过，1为连接过。

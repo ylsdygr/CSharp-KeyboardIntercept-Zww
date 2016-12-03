@@ -4,7 +4,7 @@ using System.Windows.Forms;
 using System.IO;
 
 namespace KeyboardIntercept {
-    static class Program {
+    public class Program  {
         /// <summary>
         /// 应用程序的主入口点。
         /// </summary>
@@ -13,6 +13,10 @@ namespace KeyboardIntercept {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new UserInterface());
+        }
+        static void upanrecognized()
+        {
+
         }
     }
 }
