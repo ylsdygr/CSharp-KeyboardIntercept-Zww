@@ -1,0 +1,6 @@
+{
+  "name": "CSharp-KeyboardIntercept-Zww",
+  "tagline": "使用本程序可使Windows电脑键盘及鼠标只在授权通过后正常使用。",
+  "body": "## 欢迎一起学习.Net\r\n\r\n### 程序功能及使用说明\r\n\r\n1.程序正常运行后可拦截所有Windows键盘按键（Ctrl + Alt + Delete除外）及鼠标按键；  \r\n2.程序正常运行需要配置本地授权文件及日志文件存储路径及各文件名、共享服务器端IP地址，用户名及密码；  \r\n3.程序内相关参数修改请参考文件HookHelper.cs中参数定义；  \r\n\r\n### 程序其他说明  \r\n注意：  \r\n主程序并无界面显示，运行后直接开始拦截；  \r\n\r\n### 联系方式\r\nQQ：245655340  \r\n邮箱：[245655340@qq.com](http://mail.qq.com)",
+  "note": "Don't delete this file!"
+}
