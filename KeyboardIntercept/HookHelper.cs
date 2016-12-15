@@ -9,6 +9,8 @@ using System.Collections;
 using System.Security.Cryptography;
 using System.Security.AccessControl;
 using System.Net.NetworkInformation;
+using System.Net;
+using System.Collections.Specialized;
 
 namespace KeyboardIntercept
 {
@@ -458,12 +460,13 @@ namespace KeyboardIntercept
             string nameCharacters = currentUKeyShow.Substring(18, 2);
             int nameCharactersCount = Convert.ToInt32(nameCharacters, 16);
             thisLog += currentUKeyShow.Substring(20, nameCharactersCount) + " ";
-            thisLog += "开始使用时间：";
+            thisLog += "开始时间：";
             thisLog = thisLog + System.DateTime.Now.Date.Year.ToString() + "." +
-                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
+                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + "-";
             thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." +
                 System.DateTime.Now.Second.ToString();
             string currentHostName = System.Environment.MachineName;
+            thisLog += " IP: " + this.getCurrentHostIP() + " ";
             thisLog += " 计算机名: "+ currentHostName + " ";
             string currentUserName = System.Environment.UserName;
             thisLog += "计算机用户: " + currentUserName + " ";
@@ -502,10 +505,11 @@ namespace KeyboardIntercept
             string thisLog = "";
             thisLog += "有人试图使用计算机但授权失败,时间: ";
             thisLog = thisLog + System.DateTime.Now.Date.Year.ToString() + "." +
-                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
+                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + "-";
             thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." +
                 System.DateTime.Now.Second.ToString();
             string currentHostName = System.Environment.MachineName;
+            thisLog += " IP: " + this.getCurrentHostIP() + " ";
             thisLog += " 计算机名: " + currentHostName + " ";
             string currentUserName = System.Environment.UserName;
             thisLog += "计算机用户: " + currentUserName + " ";
@@ -550,12 +554,13 @@ namespace KeyboardIntercept
             string nameCharacters = currentUKeyShow.Substring(18, 2);
             int nameCharactersCount = Convert.ToInt32(nameCharacters, 16);
             thisLog += currentUKeyShow.Substring(20, nameCharactersCount) + " ";
-            thisLog += "停止使用时间：";
+            thisLog += "停止时间：";
             thisLog = thisLog + System.DateTime.Now.Date.Year.ToString() + "." +
-                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + " ";
+                System.DateTime.Now.Date.Month.ToString() + "." + System.DateTime.Now.Date.Day.ToString() + "-";
             thisLog = thisLog + System.DateTime.Now.Hour.ToString() + "." + System.DateTime.Now.Minute.ToString() + "." +
                 System.DateTime.Now.Second.ToString();
             string currentHostName = System.Environment.MachineName;
+            thisLog += " IP: " + this.getCurrentHostIP() + " ";
             thisLog += " 计算机名: " + currentHostName + " ";
             string currentUserName = System.Environment.UserName;
             thisLog += "计算机用户: " + currentUserName + " ";
@@ -819,6 +824,24 @@ namespace KeyboardIntercept
             SendKeys.Send("");
             return 1;
             //return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
+        }
+		/// <summary>
+        /// 获取当前计算机的IP地址组
+        /// </summary>
+        /// <returns>String</returns>
+        public string getCurrentHostIP() {
+            IPAddress[] localIPs;
+            localIPs = Dns.GetHostAddresses(Dns.GetHostName());
+            StringCollection IpCollection = new StringCollection();
+            foreach (IPAddress ip in localIPs)
+            {
+                //根据AddressFamily判断是否为ipv4,如果是InterNetWorkV6则为ipv6  
+                if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                    IpCollection.Add(ip.ToString());
+            }
+            string[] IpArray = new string[IpCollection.Count];
+            IpCollection.CopyTo(IpArray, 0);
+            return IpArray[0];
         }
             
     }
