@@ -43,6 +43,7 @@ namespace KeyboardIntercept {
                             {
                                 if (drive.DriveType == DriveType.Removable)
                                 {
+                                    hook.calcCurrentParameters(ref hook.para_localLogFilePath, ref hook.para_netLogFilePath);
                                     if (hook.para_UPanCounts > 1) { break; }
                                     if (hook.para_currentNetwork == 0) { hook.networkStatusJudge(hook.para_sharedIP); }
                                     hook.judgeUPanHasKeyFileOrNot(drive.Name.ToString());
@@ -59,12 +60,12 @@ namespace KeyboardIntercept {
                                         hook.compareAuthorizedKeysUtoNet();
                                         if (hook.para_currentInputAllow == 1) {
                                             hook.para_UPanCounts = 1;
-                                            hook.updateProcess();
+                                            hook.updateProcess(hook.para_localLogFilePath,hook.para_netLogFilePath);
                                             hook.Stop();
                                             break;
                                         }
                                         else {
-                                            hook.useRecognizeFailedIntoLog();
+                                            hook.failureProcess(hook.para_localLogFilePath, hook.para_netLogFilePath);
                                         }
                                         //System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
                                     }
@@ -89,7 +90,7 @@ namespace KeyboardIntercept {
                             {   //U盘卸载
                                 if (hook.para_UPanCounts == 0) { break; }
                                 if (hook.para_UPanCounts == 1) {
-                                    if (hook.para_currentNetwork == 1) { hook.useStopIntoLog(); }
+                                    if (hook.para_currentNetwork == 1) { hook.stopUseProcess(hook.para_localLogFilePath, hook.para_netLogFilePath); }
                                     hook.para_UPanCounts = 0;
                                     hook.para_currentUPanHasKeyFile = 0;
                                     hook.para_currentInputAllow = 0;

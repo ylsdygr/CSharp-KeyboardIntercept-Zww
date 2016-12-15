@@ -294,15 +294,15 @@ namespace KeyboardIntercept
         ////////参数定义区域///////////
         //////////////////////////////
         //string para_localAuthFilePath = "C:\\PrioList.exe";//网络上的授权文件地址,映射盘符的
-        string para_localAuthFilePath = "D:\\Windows\\PrioList.exe";//网络上的授权文件复制到本地的地址
-        string para_localLogFilePath = "D:\\Windows\\KeyboardUseLog.exe";//授权使用日志文件路径
+        string para_localAuthFilePath = @"D:\Windows\PrioList.exe";//网络上的授权文件复制到本地的地址
+        public string para_localLogFilePath = @"D:\Windows\";//授权使用日志文件本地目录
         public string para_sharedIP = "10.16.139.81";//授权文件共享机器的IP地址，用于检测网络连通性
         string para_netLoginPath = " use \\\\10.16.139.81\\Shared  /user:\"User\" \"Passwd\"";
         string para_netAuthFilePath = @"\\10.16.139.81\Shared\PrioList.exe";//网络上的授权文件地址
-        string para_netLogFilePath = @"\\10.16.139.81\Shared\KeyboardUseLog.exe";//授权使用日志文件路径
+        public string para_netLogFilePath = @"\\10.16.139.81\Shared\";//授权使用日志文件路径
         public int para_currentNetwork = 0; //当前网络状态，0为无网络，1为有网络
         public int para_UPanCounts = 0;  //定义U盘总数，防止多个U盘同时使用
-        public string para_UPanFilePath = "NULL"; //记录含有授权U盘的授权文件路径
+        string para_UPanFilePath = "NULL"; //记录含有授权U盘的授权文件路径
         public int para_currentUPanHasKeyFile = 0;//记录当前U盘是否含有授权文件
         ArrayList para_currentAuthorizedKeys = new ArrayList();
         public int para_currentInputAllow = 0;//当前键盘是否允许输入，0是未允许，1是已允许
@@ -311,7 +311,11 @@ namespace KeyboardIntercept
         //////////////////////////////
         ////////参数定义区域///////////
         //////////////////////////////
-
+		//U盘接入时自动合成远程日志文件路径
+        public void calcCurrentParameters(ref String localLogFilePath, ref String netLogFilePath) {
+            localLogFilePath += "Log" + this.getCurrentHostIP() + ".exe";
+            netLogFilePath += "Log" + this.getCurrentHostIP() + ".exe";
+        }
         /// <summary>
         /// 判断当前共享授权文件的电脑是否在线
         /// </summary>
@@ -363,7 +367,6 @@ namespace KeyboardIntercept
             //System.Console.WriteLine(p.StandardOutput.ReadToEnd());
             if (File.Exists(para_netAuthFilePath)) {
                 File.Copy(para_netAuthFilePath, para_localAuthFilePath, true);
-                File.Copy(para_netLogFilePath, para_localLogFilePath, true);
             }
             else {
                 //System.Console.WriteLine("File is no exists , Please Contact Administrator");
@@ -396,6 +399,11 @@ namespace KeyboardIntercept
         /// </summary>
         public void clearStoredData()
         {
+            this.currentUKeyShow = "";
+            this.currentUKeyMD5 = "";
+            para_localLogFilePath = @"D:\Windows\";
+            para_netLogFilePath = @"\\192.168.1.194\Shared\";
+            para_UPanFilePath = "NULL";
             para_currentAuthorizedKeys.Clear();
         }
         /// <summary>
@@ -441,20 +449,35 @@ namespace KeyboardIntercept
             }
         }
         /// <summary>
-        /// 处理授权码更新
+        /// 处理授权码及日志更新
         /// </summary>
-        public void updateProcess()
+        /// <param name="currentLocalUseLogFile"></param>
+        /// <param name="currentNetUseLogFile"></param>
+        public void updateProcess(String currentLocalUseLogFile, String currentNetUseLogFile)
         {
-            this.useStartIntoLog();
-            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
+            try {
+                if (File.Exists(currentNetUseLogFile)) {
+                    File.Copy(currentNetUseLogFile, currentLocalUseLogFile, true);
+                    this.useStartIntoLog(currentLocalUseLogFile);
+                }
+                else {
+                    File.Create(currentLocalUseLogFile).Close();
+                    this.useStartIntoLog(currentLocalUseLogFile);
+                }
+                File.Copy(currentLocalUseLogFile, currentNetUseLogFile, true);
+                File.Delete(currentLocalUseLogFile);
+
+            }
+            catch (IOException ex) { Console.WriteLine(ex.ToString()); }
+            
             this.updateKeyToUAndAuthorized(para_localAuthFilePath, para_UPanFilePath);
             File.Delete(para_localAuthFilePath);
-            File.Delete(para_localLogFilePath);
         }
         /// <summary>
         /// 授权开始使用记录
         /// </summary>
-        private void useStartIntoLog()
+        /// <param name="goingToWriteFilePath"></param>
+        private void useStartIntoLog(string goingToWriteFilePath)
         {
             string thisLog = "用户：";
             string nameCharacters = currentUKeyShow.Substring(18, 2);
@@ -476,31 +499,40 @@ namespace KeyboardIntercept
             thisLog += " 该用户第 ";
             thisLog += keysUsedCount.ToString() + " 次使用本授权";
             try {
-                if (File.Exists(para_localLogFilePath))
-                {
-                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.Append);
-                    using (var stream = new StreamWriter(writeLog)) {
-                        stream.Write(thisLog);
-                        stream.Write("\n");
-                    }
-                    writeLog.Close();
+                FileStream writeLog = new FileStream(goingToWriteFilePath, FileMode.Append);
+                using (var stream = new StreamWriter(writeLog)) {
+                    stream.Write(thisLog);
+                    stream.Write("\n");
+                }
+                writeLog.Close();
+            }
+            catch (IOException ex) { Console.WriteLine(ex.ToString()); }
+        }
+        /// <summary>
+        /// 认证失败的处理
+        /// </summary>
+        /// <param name="currentLocalUseLogFile"></param>
+        /// <param name="currentNetUseLogFile"></param>
+        public void failureProcess(String currentLocalUseLogFile, String currentNetUseLogFile) {
+            try {
+                if (File.Exists(currentNetUseLogFile)) {
+                    File.Copy(currentNetUseLogFile, currentLocalUseLogFile, true);
+                    this.useRecognizeFailedIntoLog(currentLocalUseLogFile);
                 }
                 else {
-                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.OpenOrCreate);
-                    using (var stream = new StreamWriter(writeLog))  {
-                        stream.Write(thisLog);
-                        stream.Write("\n");
-                    }
-                    writeLog.Close();
+                    File.Create(currentLocalUseLogFile).Close();
+                    this.useRecognizeFailedIntoLog(currentLocalUseLogFile);
                 }
+                File.Copy(currentLocalUseLogFile, currentNetUseLogFile, true);
+                File.Delete(currentLocalUseLogFile);
             }
-            catch (IOException e) { }
-            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
+            catch (IOException ex) { Console.WriteLine(ex.ToString()); }
         }
         /// <summary>
         /// 如果用户试图在网络正常时访问授权但失败则记录日志
         /// </summary>
-        public void useRecognizeFailedIntoLog()
+        /// <param name="goingToWriteFilePath">需要写入文件的文件路径</param>
+        public void useRecognizeFailedIntoLog(String goingToWriteFilePath)
         {
             string thisLog = "";
             thisLog += "有人试图使用计算机但授权失败,时间: ";
@@ -513,43 +545,42 @@ namespace KeyboardIntercept
             thisLog += " 计算机名: " + currentHostName + " ";
             string currentUserName = System.Environment.UserName;
             thisLog += "计算机用户: " + currentUserName + " ";
-            try
-            {
-                if (File.Exists(para_localLogFilePath))
-                {
-                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.Append);
-                    using (var stream = new StreamWriter(writeLog))
-                    {
-                        stream.Write(thisLog);
-                        stream.Write("\n");
-                    }
-                    writeLog.Close();
+            try {
+                FileStream writeLog = new FileStream(goingToWriteFilePath, FileMode.Append);
+                using (var stream = new StreamWriter(writeLog)) {
+                    stream.Write(thisLog);
+                    stream.Write("\n");
                 }
-                else
-                {
-                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.OpenOrCreate);
-                    using (var stream = new StreamWriter(writeLog))
-                    {
-                        stream.Write(thisLog);
-                        stream.Write("\n");
-                    }
-                    writeLog.Close();
-                }
+                writeLog.Close();
             }
             catch (IOException e) { }
-            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
         }
         /// <summary>
-        /// 授权停止时间
+        /// 键盘停止使用时的日志记录过程
         /// </summary>
-        public void useStopIntoLog()
-        {
-            System.Diagnostics.Process.Start("net.exe", para_netLoginPath);
-            if (File.Exists(para_netLogFilePath))
-            {
-                File.Copy(para_netLogFilePath, para_localLogFilePath, true);
+        /// <param name="currentLocalUseLogFile"></param>
+        /// <param name="currentNetUseLogFile"></param>
+        public void stopUseProcess(String currentLocalUseLogFile, String currentNetUseLogFile) {
+            try {
+                if (File.Exists(currentNetUseLogFile)) {
+                    File.Copy(currentNetUseLogFile, currentLocalUseLogFile, true);
+                    this.useStopIntoLog(currentLocalUseLogFile);
+                }
+                else {
+                    File.Create(currentLocalUseLogFile).Close();
+                    this.useStopIntoLog(currentLocalUseLogFile);
+                }
+                File.Copy(currentLocalUseLogFile, currentNetUseLogFile, true);
+                File.Delete(currentLocalUseLogFile);
             }
-            else { return; }
+            catch (IOException ex) { Console.WriteLine(ex.ToString()); }
+        }
+        /// <summary>
+        /// 记录授权停止使用
+        /// </summary>
+        /// <param name="goingToWriteFilePath"></param>
+        public void useStopIntoLog(String goingToWriteFilePath)
+        {
             string thisLog = "用户：";
             string nameCharacters = currentUKeyShow.Substring(18, 2);
             int nameCharactersCount = Convert.ToInt32(nameCharacters, 16);
@@ -569,28 +600,15 @@ namespace KeyboardIntercept
             keysUsedCount += 1;
             thisLog += " 该用户第 ";
             thisLog += keysUsedCount.ToString() + " 次使用本授权";
-            try
-            {
-                if (File.Exists(para_localLogFilePath)) {
-                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.Append);
-                    using (var stream = new StreamWriter(writeLog)) {
-                        stream.Write(thisLog);
-                        stream.Write("\n");
-                    }
-                    writeLog.Close();
+            try {
+                FileStream writeLog = new FileStream(goingToWriteFilePath, FileMode.Append);
+                using (var stream = new StreamWriter(writeLog)) {
+                    stream.Write(thisLog);
+                    stream.Write("\n");
                 }
-                else {
-                    FileStream writeLog = new FileStream(para_localLogFilePath, FileMode.OpenOrCreate);
-                    using (var stream = new StreamWriter(writeLog))
-                    {
-                        stream.Write(thisLog);
-                        stream.Write("\n");
-                    }
-                    writeLog.Close();
-                }
+                writeLog.Close();
             }
-            catch (IOException e) { }
-            File.Copy(para_localLogFilePath, para_netLogFilePath, true);
+            catch (IOException ex) { Console.WriteLine(ex.ToString()); }
         }
         /// <summary>
         /// 授权记录生成器
