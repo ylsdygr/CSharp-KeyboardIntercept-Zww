@@ -6,16 +6,50 @@ using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
 using System.IO;
-//using System.Threading;
+using System.Collections;
+//以下两条引用在嵌入dll时使用
+using System.Reflection;
+using System.Resources;
 
 namespace KeyboardIntercept {
     public partial class UserInterface : Form {
+        /// <summary>
+        /// 将DLL嵌入进exe的方法
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="args"></param>
+        /// <returns></returns>
+        Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
+        {
+            string dllName = args.Name.Contains(",") ? args.Name.Substring(0, args.Name.IndexOf(',')) : args.Name.Replace(".dll", "");
+            dllName = dllName.Replace(".", "_");
+            if (dllName.EndsWith("_resources")) return null;
+            ResourceManager rm = new ResourceManager(GetType().Namespace + ".Properties.Resources", Assembly.GetExecutingAssembly());
+            byte[] bytes = (byte[])rm.GetObject(dllName);
+            return Assembly.Load(bytes);
+        }
         public UserInterface() {
-            InitializeComponent();
+            //嵌入Dll的方法调用
+            AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
             //btnInstallHook_Click(null, null);
+            InitializeComponent();
+            /*
+            //数据库测试
+            ArrayList aaa = new ArrayList();
+            DatabaseOperator DO = new DatabaseOperator(PD.para_DatabaseIP, PD.para_DatabaseUser, PD.para_DatabasePWD, PD.para_DatabaseName, PD.para_DatabasePort);
+            DO.queryMysqlDatabase("select * from authorized_lists where user_name = 'ZhangSan'", ref aaa);
+            for (int i = 0; i < aaa.Count; i++) {
+                Type aa = aaa[i].GetType();
+                Console.WriteLine(aaa);
+                Console.WriteLine(aaa[i]);
+            }
+             * */
         }
         /// 声明一个hook对象
         GlobalHook hook;
+        //初始化参数定义类对象
+        ParametersDefine PD = new ParametersDefine();
+        //U盘监控进程并自动识别
         public const int WM_DEVICECHANGE = 0x219;
         public const int DBT_DEVICEARRIVAL = 0x8000;
         public const int DBT_CONFIGCHANGECANCELED = 0x0019;
@@ -30,7 +64,7 @@ namespace KeyboardIntercept {
         public const int DBT_QUERYCHANGECONFIG = 0x0017;
         public const int DBT_USERDEFINED = 0xFFFF;
 
-        protected override void WndProc(ref   Message m)
+        protected override void WndProc(ref Message m)
         {
             try {
                 if (m.Msg == WM_DEVICECHANGE) {
@@ -43,32 +77,63 @@ namespace KeyboardIntercept {
                             {
                                 if (drive.DriveType == DriveType.Removable)
                                 {
-                                    if (hook.para_UPanCounts > 1) { break; }
-                                    if (hook.para_currentNetwork == 0) { hook.networkStatusJudge(hook.para_sharedIP); }
-                                    hook.judgeUPanHasKeyFileOrNot(drive.Name.ToString());
+                                    if (PD.para_UPanCounts >= 1) { break; }
+                                    FunctionsIndex FI = new FunctionsIndex();
+                                    FI.judgeUPanHasKeyFileOrNot(drive.Name.ToString(),ref PD.para_UPanFilePath,ref PD.para_currentUPanHasKeyFile);
                                     //System.Console.WriteLine(drive.Name.ToString());
-                                    if (hook.para_currentUPanHasKeyFile == 0) { break; }//U盘不包含授权文件，直接忽略
-                                    else if (hook.para_currentNetwork == 0 && hook.para_currentUPanHasKeyFile == 1){
+                                    if (PD.para_currentUPanHasKeyFile == 0) {
+                                        FI.clearStoredData(ref PD.para_currentAuthorizedKeys,ref PD.para_queryResult, ref PD.para_UPanFilePath,
+                                        ref PD.para_currentUKeyShow, ref PD.para_currentUKeyMD5,ref PD.para_theRightULetter,PD.para_localAuthFilePath);
+                                        break; 
+                                    }//U盘不包含授权文件，直接忽略
+                                    //U盘有授权文件，判断网络
+                                    PD.para_currentNetwork = 0;
+                                    if (PD.para_useFileOrDatabase == 0) {
+                                        PD.para_currentNetwork = FI.networkStatusJudge(PD.para_DatabaseIP);
+                                    }
+                                    else { PD.para_currentNetwork = FI.networkStatusJudge(PD.para_sharedIP); }
+                                    if (PD.para_currentNetwork == 0 && PD.para_currentUPanHasKeyFile == 1){
                                         //网络断开且U盘中包含授权文件，则直接停止拦截
-                                        hook.para_UPanCounts = 1;
+                                        PD.para_UPanCounts = 1;
+                                        hook.para_currentInputAllow = 1;
+                                        PD.para_currentInputAllow = 1;
                                         hook.Stop();
                                         break;
                                     }
                                     else{//网络正常且U盘中包含授权文件的处理
-                                        hook.authorizedKeyFilesLogFileCopy();
-                                        hook.compareAuthorizedKeysUtoNet();
-                                        if (hook.para_currentInputAllow == 1) {
-                                            hook.para_UPanCounts = 1;
-                                            hook.updateProcess();
-                                            hook.Stop();
-                                            break;
+                                        ProcessManager PM = new ProcessManager();
+                                        int recogResult = 2;
+                                        if (PD.para_useFileOrDatabase == 0) {
+                                            recogResult = PM.databaseRecognizeProcess(PD.para_DatabaseIP, PD.para_DatabaseUser,
+                                                PD.para_DatabasePWD, PD.para_DatabaseName, PD.para_DatabasePort,
+                                                ref PD.para_queryResult, PD.para_UPanFilePath, ref PD.para_currentInputAllow,
+                                                ref PD.para_currentUKeyShow, ref PD.para_currentUKeyMD5 );
+                                        }
+                                        else if (PD.para_useFileOrDatabase == 1) {
+                                            recogResult = PM.fileRecognizeProcess(PD.para_netLoginCommand, PD.para_netLogFilePath,
+                                                PD.para_localLogFilePath, PD.para_netAuthFilePath, PD.para_localAuthFilePath,
+                                                ref PD.para_currentAuthorizedKeys, PD.para_UPanFilePath, ref PD.para_currentInputAllow,
+                                                ref PD.para_currentUKeyShow, ref PD.para_currentUKeyMD5);
                                         }
                                         else {
-                                            hook.useRecognizeFailedIntoLog();
+                                            recogResult = PM.databaseRecognizeProcess(PD.para_DatabaseIP, PD.para_DatabaseUser,
+                                                PD.para_DatabasePWD, PD.para_DatabaseName, PD.para_DatabasePort,
+                                                ref PD.para_queryResult, PD.para_UPanFilePath, ref PD.para_currentInputAllow,
+                                                ref PD.para_currentUKeyShow, ref PD.para_currentUKeyMD5);
+                                            recogResult = PM.fileRecognizeProcess(PD.para_netLoginCommand, PD.para_netLogFilePath,
+                                                PD.para_localLogFilePath, PD.para_netAuthFilePath, PD.para_localAuthFilePath,
+                                                ref PD.para_currentAuthorizedKeys, PD.para_UPanFilePath, ref PD.para_currentInputAllow,
+                                                ref PD.para_currentUKeyShow, ref PD.para_currentUKeyMD5);
                                         }
+                                        if (recogResult == 2) { PD.para_queryResult.Clear(); break; }
+                                        if (recogResult == 0) { PD.para_UPanCounts = 1; hook.Stop(); break; }
+                                        hook.para_currentInputAllow = 1;
+                                        PD.para_UPanCounts = 1;
+                                        PD.para_theRightULetter = drive.Name.ToString();
+                                        hook.Stop();
+                                        break;
                                         //System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
                                     }
-                                    
                                     //System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
                                     //lbKeyState.Text = "U盘已插入，盘符为:" + drive.Name.ToString();
                                     break;
@@ -87,13 +152,34 @@ namespace KeyboardIntercept {
                             break;
                         case DBT_DEVICEREMOVECOMPLETE:
                             {   //U盘卸载
-                                if (hook.para_UPanCounts == 0) { break; }
-                                if (hook.para_UPanCounts == 1) {
-                                    if (hook.para_currentNetwork == 1) { hook.useStopIntoLog(); }
-                                    hook.para_UPanCounts = 0;
-                                    hook.para_currentUPanHasKeyFile = 0;
+                                if (Directory.Exists(PD.para_theRightULetter)) { break; }
+                                if (PD.para_UPanCounts == 0) { break; }
+                                if (PD.para_UPanCounts == 1) {
+                                    FunctionsIndex FI = new FunctionsIndex();
+                                    if (PD.para_currentNetwork == 1) {
+                                        ProcessManager PM = new ProcessManager();
+                                        if (PD.para_useFileOrDatabase == 0) {
+                                            if (FI.networkStatusJudge(PD.para_DatabaseIP) == 1)
+                                                PM.rejectUPanDatabaseProcess(PD.para_currentUKeyShow, PD.para_DatabaseIP, PD.para_DatabaseUser,
+                                                PD.para_DatabasePWD,PD.para_DatabaseName,PD.para_DatabasePort);
+                                        }
+                                        else if (PD.para_useFileOrDatabase == 1) {
+                                            PM.rejectUPanFileProcess(PD.para_netLoginCommand, PD.para_netLogFilePath, PD.para_localLogFilePath,
+                                                PD.para_currentUKeyShow);
+                                        }
+                                        else {
+                                            PM.rejectUPanDatabaseProcess(PD.para_currentUKeyShow, PD.para_DatabaseIP, PD.para_DatabaseUser,
+                                                PD.para_DatabasePWD, PD.para_DatabaseName, PD.para_DatabasePort);
+                                            PM.rejectUPanFileProcess(PD.para_netLoginCommand, PD.para_netLogFilePath, PD.para_localLogFilePath,
+                                                PD.para_currentUKeyShow);
+                                        }
+                                    }
+                                    PD.para_UPanCounts = 0;
+                                    PD.para_currentUPanHasKeyFile = 0;
+                                    PD.para_currentInputAllow = 0;
                                     hook.para_currentInputAllow = 0;
-                                    hook.clearStoredData();
+                                    FI.clearStoredData(ref PD.para_currentAuthorizedKeys, ref PD.para_queryResult, ref PD.para_UPanFilePath,
+                                        ref PD.para_currentUKeyShow, ref PD.para_currentUKeyMD5,ref PD.para_theRightULetter, PD.para_localAuthFilePath);
                                     hook.Start();
                                 }
                                 //System.Console.WriteLine("UPanhasUnpluged");

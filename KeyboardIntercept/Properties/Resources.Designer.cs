@@ -59,5 +59,35 @@ namespace KeyboardIntercept.Properties {
                 resourceCulture = value;
             }
         }
+        
+        /// <summary>
+        ///   查找 System.Byte[] 类型的本地化资源。
+        /// </summary>
+        internal static byte[] MySql_Data {
+            get {
+                object obj = ResourceManager.GetObject("MySql_Data", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   查找 System.Byte[] 类型的本地化资源。
+        /// </summary>
+        internal static byte[] MySql_Data_Entity_EF5 {
+            get {
+                object obj = ResourceManager.GetObject("MySql_Data_Entity_EF5", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   查找 System.Byte[] 类型的本地化资源。
+        /// </summary>
+        internal static byte[] MySql_Data_Entity_EF6 {
+            get {
+                object obj = ResourceManager.GetObject("MySql_Data_Entity_EF6", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
     }
 }
