@@ -1,7 +1,10 @@
+##2017年02月21日  
+####1.增加窗体在Alt+Tab键应用切换中的隐藏  
+
 ##2016年12月23日  
 ####1.更新数据库表结构  
 ####2.将表authorized_lists中number设为主键且自增长  
-####2.将表authorized_lists表中的user_name的Unique限制解除，即允许姓名重名  
+####3.将表authorized_lists表中的user_name的Unique限制解除，即允许姓名重名  
   
 ##2016年12月21日  
 ####1.修复单线程访问数据库时报错的Bug

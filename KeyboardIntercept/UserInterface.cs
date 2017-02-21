@@ -264,11 +264,24 @@ namespace KeyboardIntercept {
            //MessageBox.Show("按下了");
         }
         /// 键盘按下
-         void hook_KeyDown(object sender, KeyEventArgs e)
-        {
+        void hook_KeyDown(object sender, KeyEventArgs e) {
             //针对消息处理的回显
             lbKeyState.Text = "开始识别密码";
             lbKeyState.Text = "键盘按下, " + e.KeyData.ToString() + " 键码:" + e.KeyValue;
+        }
+        /// <summary>
+        /// 继续父类WinForm对窗口是否显示的方法
+        /// </summary>
+        protected override CreateParams CreateParams {
+             get
+             {
+                 const int WS_EX_APPWINDOW = 0x40000;
+                 const int WS_EX_TOOLWINDOW = 0x80;
+                 CreateParams cp = base.CreateParams;
+                 cp.ExStyle &= (~WS_EX_APPWINDOW);    // 不显示在TaskBar  
+                 cp.ExStyle |= WS_EX_TOOLWINDOW;      // 不显示在Alt-Tab  
+                 return cp;
+             }
         }
 
     }
