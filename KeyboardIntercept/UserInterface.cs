@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows.Forms;
 using System.IO;
 using System.Collections;
+using System.Net;
 //以下两条引用在嵌入dll时使用
 using System.Reflection;
 using System.Resources;
@@ -33,22 +34,13 @@ namespace KeyboardIntercept {
             AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
             //btnInstallHook_Click(null, null);
             InitializeComponent();
-            /*
-            //数据库测试
-            ArrayList aaa = new ArrayList();
-            DatabaseOperator DO = new DatabaseOperator(PD.para_DatabaseIP, PD.para_DatabaseUser, PD.para_DatabasePWD, PD.para_DatabaseName, PD.para_DatabasePort);
-            DO.queryMysqlDatabase("select * from authorized_lists where user_name = 'ZhangSan'", ref aaa);
-            for (int i = 0; i < aaa.Count; i++) {
-                Type aa = aaa[i].GetType();
-                Console.WriteLine(aaa);
-                Console.WriteLine(aaa[i]);
-            }
-             * */
         }
         /// 声明一个hook对象
         GlobalHook hook;
         //初始化参数定义类对象
         ParametersDefine PD = new ParametersDefine();
+        //设置一个定时器，每隔15秒执行一次
+        System.Timers.Timer scanSavedImage = new System.Timers.Timer(15000); //设置时间间隔为15秒
         //U盘监控进程并自动识别
         public const int WM_DEVICECHANGE = 0x219;
         public const int DBT_DEVICEARRIVAL = 0x8000;
@@ -97,11 +89,12 @@ namespace KeyboardIntercept {
                                         PD.para_UPanCounts = 1;
                                         hook.para_currentInputAllow = 1;
                                         PD.para_currentInputAllow = 1;
-                                        hook.Stop();
+                                        //hook.Stop();
                                         break;
                                     }
                                     else{//网络正常且U盘中包含授权文件的处理
                                         ProcessManager PM = new ProcessManager();
+                                        //定义识别结果代码，2为识别失败，判断为Attacker，1为识别成功，更新及记录成功，0为识别成功，但更新及记录失败
                                         int recogResult = 2;
                                         if (PD.para_useFileOrDatabase == 0) {
                                             recogResult = PM.databaseRecognizeProcess(PD.para_DatabaseIP, PD.para_DatabaseUser,
@@ -126,11 +119,17 @@ namespace KeyboardIntercept {
                                                 ref PD.para_currentUKeyShow, ref PD.para_currentUKeyMD5);
                                         }
                                         if (recogResult == 2) { PD.para_queryResult.Clear(); break; }
-                                        if (recogResult == 0) { PD.para_UPanCounts = 1; hook.Stop(); break; }
+                                        if (recogResult == 0) { 
+                                            //PD.para_UPanCounts = 1; 
+                                            //hook.Stop();
+                                            hook.para_currentInputAllow = 1;
+                                            PD.para_UPanCounts = 1;
+                                            PD.para_theRightULetter = drive.Name.ToString();
+                                            break; }
                                         hook.para_currentInputAllow = 1;
                                         PD.para_UPanCounts = 1;
                                         PD.para_theRightULetter = drive.Name.ToString();
-                                        hook.Stop();
+                                        //hook.Stop();
                                         break;
                                         //System.Console.WriteLine("UPanHasPlugin" + drive.Name.ToString());
                                     }
@@ -180,7 +179,7 @@ namespace KeyboardIntercept {
                                     hook.para_currentInputAllow = 0;
                                     FI.clearStoredData(ref PD.para_currentAuthorizedKeys, ref PD.para_queryResult, ref PD.para_UPanFilePath,
                                         ref PD.para_currentUKeyShow, ref PD.para_currentUKeyMD5,ref PD.para_theRightULetter, PD.para_localAuthFilePath);
-                                    hook.Start();
+                                    //hook.Start();
                                 }
                                 //System.Console.WriteLine("UPanhasUnpluged");
                             }
@@ -211,6 +210,11 @@ namespace KeyboardIntercept {
         private void Form1_Load(object sender, EventArgs e) {
             btnInstallHook.Enabled = true;
             btnUnInstall.Enabled = false;
+            //设定定时任务属性并且状态为启动
+            scanSavedImage.Elapsed += new System.Timers.ElapsedEventHandler(Timer_TimesUp);
+            scanSavedImage.AutoReset = true; //每到指定时间Elapsed事件是触发一次（false），还是一直触发（true）
+            scanSavedImage.Enabled = true;
+            scanSavedImage.Start();
             //初始化钩子对象
             if (hook == null)
             {
@@ -226,6 +230,41 @@ namespace KeyboardIntercept {
         private void Form1_FormClosing(object sender, FormClosingEventArgs e) {
             if (btnUnInstall.Enabled == true) {
                 hook.Stop();
+            }
+        }
+        private void Timer_TimesUp(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            //到达指定时间触发扫描一次指定目录
+            FunctionsIndex getIP = new FunctionsIndex();
+            string currentMachineIP = getIP.getCurrentHostIP();
+            /*IPAddress[] localIPs;
+                localIPs = Dns.GetHostAddresses(Dns.GetHostName());
+                StringCollection IpCollection = new StringCollection();
+                foreach (IPAddress ip in localIPs) {
+                    //根据AddressFamily判断是否为ipv4,如果是InterNetWorkV6则为ipv6
+                    if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                        IpCollection.Add(ip.ToString());
+                }
+                string[] IpArray = new string[IpCollection.Count];
+                IpCollection.CopyTo(IpArray, 0);
+                string thisHostIP =  IpArray[0];
+            */
+            //定义文件服务器的地址信息
+            string para_fileUploadServerAddress = @"http://192.168.30.126:9010/Uploaded_Files/";
+            string para_localScreenCaptureImageDIR = @"D:\\ScreenCapture";
+            //System.Diagnostics.Debug.WriteLine(currentMachineIP);
+            if (!Directory.Exists(para_localScreenCaptureImageDIR)) { return; }
+            DirectoryInfo sourceDIR = new DirectoryInfo(para_localScreenCaptureImageDIR);
+            if ((sourceDIR.GetFiles().Length + sourceDIR.GetDirectories().Length) == 0) { return; }
+            WebClient myWebClient = new WebClient();
+            FileInfo[] filesInDIR = sourceDIR.GetFiles();
+            foreach (FileInfo currentFile in filesInDIR) {
+                //Console.WriteLine(currentFile.FullName);
+                try {
+                    myWebClient.UploadFile(para_fileUploadServerAddress + currentMachineIP + "/", "POST", currentFile.FullName);
+                    File.Delete(currentFile.FullName);
+                }
+                catch (Exception ex) { }
             }
         }
         private void btnInstallHook_Click(object sender, EventArgs e) {

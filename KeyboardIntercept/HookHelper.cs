@@ -2,6 +2,17 @@
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Linq;
+using System.Text;
+using System.Windows;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Threading.Tasks;
+using System.IO;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Collections.Specialized;
+
 
 namespace KeyboardIntercept
 {
@@ -219,8 +230,9 @@ namespace KeyboardIntercept
             //System.Console.WriteLine(WM_RBUTTONDBLCLK);   //518
             //临时权限放行
             //keyboardCurrentAllow = 1;
-            if (para_currentInputAllow == 0 &&
-                (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP || wParam == WM_RBUTTONDBLCLK)){
+            //
+            if (para_currentInputAllow == 0 && (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP || wParam == WM_RBUTTONDBLCLK))
+            {
                 return 1;
             }
             if ((nCode >= 0) && (OnMouseActivity != null))
@@ -260,9 +272,76 @@ namespace KeyboardIntercept
                     0);
                 OnMouseActivity(this, e);
             }
+            //键盘放行后每次单击调用截图方法截图
+            //para_currentInputAllow == 0 && || wParam == WM_LBUTTONUP
+            if (para_currentInputAllow == 1 && (wParam == WM_LBUTTONDOWN || wParam == WM_LBUTTONDBLCLK))
+            {
+                //Console.WriteLine("按了左键");
+                string para_localScreenCaptureLocation = @"D:\\ScreenCapture";
+                if (!Directory.Exists(para_localScreenCaptureLocation))
+                    Directory.CreateDirectory(para_localScreenCaptureLocation);
+
+                String thisTimeFileName = System.DateTime.Now.ToString("yyyy.MM.dd_hh.mm.ss");
+                CaptureDesktop(para_localScreenCaptureLocation + "\\" + thisTimeFileName + ".jpg");
+            }
             return CallNextHookEx(_hMouseHook, nCode, wParam, lParam);
         }
         //The ToAscii function translates the specified virtual-key code and keyboard state to the corresponding character or characters. The function translates the code using the input language and physical keyboard layout identified by the keyboard layout handle.
+        //Import ScreenCapture DLL
+        [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+        public static extern IntPtr CreateDC(string driver, string device, IntPtr res1, IntPtr res2);
+        public enum TernaryRasterOperations
+        {
+            SRCCOPY = 0x00CC0020, /* dest = source*/
+            SRCPAINT = 0x00EE0086, /* dest = source OR dest*/
+            SRCAND = 0x008800C6, /* dest = source AND dest*/
+            SRCINVERT = 0x00660046, /* dest = source XOR dest*/
+            SRCERASE = 0x00440328, /* dest = source AND (NOT dest )*/
+            NOTSRCCOPY = 0x00330008, /* dest = (NOT source)*/
+            NOTSRCERASE = 0x001100A6, /* dest = (NOT src) AND (NOT dest) */
+            MERGECOPY = 0x00C000CA, /* dest = (source AND pattern)*/
+            MERGEPAINT = 0x00BB0226, /* dest = (NOT source) OR dest*/
+            PATCOPY = 0x00F00021, /* dest = pattern*/
+            PATPAINT = 0x00FB0A09, /* dest = DPSnoo*/
+            PATINVERT = 0x005A0049, /* dest = pattern XOR dest*/
+            DSTINVERT = 0x00550009, /* dest = (NOT dest)*/
+            BLACKNESS = 0x00000042, /* dest = BLACK*/
+            WHITENESS = 0x00FF0062, /* dest = WHITE*/
+        };
+        [DllImport("gdi32.dll")]
+        public static extern bool BitBlt(IntPtr hObject, int nXDest, int nYDest, int nWidth,
+            int nHeight, IntPtr hObjSource, int nXSrc, int nYSrc, TernaryRasterOperations dwRop);
+
+        public static void CaptureDesktop(string sPath)
+        {
+            Rectangle rect = new Rectangle();
+            rect.Width = Screen.PrimaryScreen.Bounds.Width;
+            rect.Height = Screen.PrimaryScreen.Bounds.Height;
+            IntPtr dcTmp = CreateDC("DISPLAY", "DISPLAY", (IntPtr)null, (IntPtr)null);
+            Graphics gScreen = Graphics.FromHdc(dcTmp);
+            Bitmap image = new Bitmap((int)(rect.Width), (int)(rect.Height), System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            Graphics gImage = Graphics.FromImage(image);
+            IntPtr dcImage = gImage.GetHdc();
+            IntPtr dcScreen = gScreen.GetHdc();
+            BitBlt(dcImage, 0, 0, (int)(rect.Width), (int)(rect.Height), dcScreen, (int)(rect.Left), (int)(rect.Top), TernaryRasterOperations.SRCCOPY);
+            gScreen.ReleaseHdc(dcScreen);
+            gImage.ReleaseHdc(dcImage);
+            //将格式转换为JPEG来保存
+            ImageCodecInfo[] vImageCodecInfos = ImageCodecInfo.GetImageEncoders();
+            foreach (ImageCodecInfo vImageCodecInfo in vImageCodecInfos)
+            {
+                if (vImageCodecInfo.FormatDescription.ToLower() == "jpeg")
+                {
+                    EncoderParameters vEncoderParameters = new EncoderParameters(1);
+                    vEncoderParameters.Param[0] = new EncoderParameter(
+                        System.Drawing.Imaging.Encoder.Quality, 75L);
+                    image.Save(sPath, vImageCodecInfo, vEncoderParameters);
+                    break;
+                }
+            }
+            //以上将格式转换为JPEG保存
+            //image.Save(sPath);
+        }
 
         [DllImport("user32")]
         public static extern int ToAscii(int uVirtKey, //[in] Specifies the virtual-key code to be translated. 
@@ -299,14 +378,17 @@ namespace KeyboardIntercept
              //   return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
             //}
             //if (nCode >= 0 && wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
-            if (nCode >= 0 && wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
+            if (para_currentInputAllow == 0)
             {
-                ///////////////////////////////////////////////////////////////////////////////////////////////
                 SendKeys.Send("");
                 return 1;
+            }
+            if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN || wParam == WM_KEYUP || wParam == WM_SYSKEYUP))
+            {
+                ///////////////////////////////////////////////////////////////////////////////////////////////
                 KeyboardHookStruct MyKeyboardHookStruct = (KeyboardHookStruct)Marshal.PtrToStructure(lParam, typeof(KeyboardHookStruct));
                 Keys keyData = (Keys)MyKeyboardHookStruct.vkCode;
-                //return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
+                return CallNextHookEx(_hKeyboardHook, nCode, wParam, lParam);
             }
             SendKeys.Send("");
             return 1;
